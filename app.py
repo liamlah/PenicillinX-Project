@@ -16,11 +16,14 @@
 
 
 import pandas as pd
+from pandas.core.interchange.dataframe_protocol import DataFrame
 #from pathlib import Path
 
 
 # RDKit imports
 from rdkit import Chem
+from rdkit.Chem import rdFingerprintGenerator
+
 #from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem import rdDepictor
 
@@ -32,7 +35,7 @@ def start_choices():
     #algochoice = int(input("select which algorithm to use\n1.Direct Matching\n2.Dice Similarity\n3.et al.\n#"))
     algochoice = int(1) # Delete after troubleshooting
     if algochoice == 1:
-        direct_match()
+        direct_match3()
     elif algochoice == 2:
         dice_similarity()
     else:
@@ -40,39 +43,64 @@ def start_choices():
         start_choices()
 
 
-def direct_match(): # Same algorithm currently used in PenicillinX
-    print("Direct Matching")
-    matrixData = []
+def direct_match3():
+    print("Direct Matching...")
 
-    for firstABx in ABxList:
-        rowSmiles = abxData.loc[abxData["Antibiotic"] == firstABx, "SMILESR1"].values[0]
-        #print(firstABx)
-        rowMol = Chem.MolFromSmiles(rowSmiles) if pd.notna(rowSmiles) else None
-        resultsRow = []
+    mol_series = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+        lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+    )
 
-        for secondABx in ABxList:
-            colSmiles = abxData.loc[abxData["Antibiotic"] == secondABx, "SMILESR1"].values[0]
-            colMol = Chem.MolFromSmiles(colSmiles) if pd.notna(colSmiles) else None
+    names = ABxList
+    matrix_df = pd.DataFrame(0, index=names, columns=names)
 
-            if rowMol and colMol:
-                if rowMol.HasSubstructMatch(colMol):
-                    resultsRow.append(1) # For the match
-                else:
-                    resultsRow.append(0)
+    for row_name in names:
+        row_mol = mol_series[row_name]
+        if row_mol is None:
+            continue
 
-            else:
-                resultsRow.append(0)
-                print("you are missing data")
+        # Check both directions: A contains B OR B contains A
+        matrix_df.loc[row_name] = mol_series.apply(
+            lambda col_mol: 1 if (col_mol and row_mol and (
+                row_mol.HasSubstructMatch(col_mol) or
+                col_mol.HasSubstructMatch(row_mol)
+            )) else 0
+        )
 
-        matrixData.append(resultsRow)
-        print(matrixData)
-
+    matrix_df.to_csv('direct_match3.csv', sep=',', index_label='Antibiotic')
+    return matrix_df
 
 
 
+def RDKit_Dice():
+    print("RPxProjectDocumentDKit Fingerpring with Dice Similarity")
 
-def dice_similarity():
-    print("Dice Similarity")
+    mol_series = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+        lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+
+    )
+
+    names = ABxList
+    matrix_df = pd.DataFrame(0, index=names, columns=names)
+
+    for row_name in names:
+        row_mol = mol_series[row_name]
+        if row_mol is None:
+            continue
+
+        # Check both directions: A contains B OR B contains A
+        matrix_df.loc[row_name] = mol_series.apply(
+            lambda col_mol: 1 if (col_mol and row_mol and (
+                row_mol.HasSubstructMatch(col_mol) or
+                col_mol.HasSubstructMatch(row_mol)
+            )) else 0
+        )
+
+    matrix_df.to_csv('RdKitDice.csv', sep=',', index_label='Antibiotic')
+    fpgen.GetCountFingerprint(m)
+    rdkit.Chem.AtomPairs.Utils.DiceSimilarity(v1, v2, bounds=None)
 
 
-start_choices()
+
+
+
+    start_choices()

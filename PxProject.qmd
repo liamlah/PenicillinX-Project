@@ -1,0 +1,306 @@
+---
+title: "PenicillinX-Project"
+format: pdf
+---
+
+```{r OriginalChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix re-created from X et al"}
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "100%"
+# Install if missing: BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+library(circlize)
+# Make sure Gu are cited for the above libraries
+# [@gu2014]
+# [@gu2022]
+
+data <- read.csv("~/PycharmProjects/PenicillinX-Project/Original.csv", row.names = 1, check.names = FALSE)
+mat <- as.matrix(data)
+
+# Makes midline grey
+diag(mat) <- -1
+
+# Matches reference dataset
+col_fn = colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F", "#FF0000","#CF734F","#FFFFFF"))
+
+
+Heatmap(mat, 
+        name = "Match",
+        col = col_fn,
+        
+        # Labels
+        row_names_side = "left",      # Moves antibiotic labels to the Left
+        column_names_side = "top",    # Moves antibiotic labels to the Top
+        
+        # Grid
+        rect_gp = gpar(col = "black", lwd = 0.4), # Adds the black grid lines
+        cluster_rows = FALSE,         # Keep your specific list order
+        cluster_columns = FALSE,
+        
+        
+        # TEXT 
+        column_names_rot = 90,        # Vertical text for top labels
+        row_names_gp = gpar(fontsize = 8),
+        column_names_gp = gpar(fontsize = 8),
+        
+        show_heatmap_legend = FALSE,
+        
+# Matching the thick lines from reference dataset
+        layer_fun = function(j, i, x, y, width, height, fill) {
+          n_row = nrow(mat)
+          n_col = ncol(mat)
+          
+          # Vertical lines 
+          v_idx = seq(5, n_col - 1, by = 5)
+          if(length(v_idx) > 0) {
+            grid.segments(
+              x0 = unit(v_idx / n_col, "npc"), 
+              y0 = unit(0, "npc"),
+              x1 = unit(v_idx / n_col, "npc"), 
+              y1 = unit(1, "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+          
+          # Horizontal lines 
+          h_idx = seq(5, n_row - 1, by = 5)
+          if(length(h_idx) > 0) {
+            grid.segments(
+              x0 = unit(0, "npc"), 
+              y0 = unit(1 - (h_idx / n_row), "npc"),
+              x1 = unit(1, "npc"), 
+              y1 = unit(1 - (h_idx / n_row), "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+        }
+
+)
+```
+
+
+
+```{python directMatchAlgorithm, echo=FALSE}
+import pandas as pd
+from rdkit import Chem
+
+abxData = pd.read_csv("antibiotics_data.csv")
+ABxList = abxData["Antibiotic"].tolist()
+
+#len(set(abxData["SMILESR1"])) # Can delete, tells unique number of Side chains
+
+
+mol_series = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+    lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+)
+
+names = ABxList
+matrix_df = pd.DataFrame(0, index=names, columns=names)
+
+for row_name in names:
+    row_mol = mol_series[row_name]
+    if row_mol is None:
+        continue
+
+    # Check both directions: A contains B OR B contains A
+    matrix_df.loc[row_name] = mol_series.apply(
+        lambda col_mol: 1 if (col_mol and row_mol and (
+            row_mol.HasSubstructMatch(col_mol) or
+            col_mol.HasSubstructMatch(row_mol)
+        )) else 0
+    )
+
+matrix_df.to_csv('direct_match.csv', sep=',', index_label='Antibiotic')
+
+
+```
+<!-- Keep adjacent-->
+```{r DirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using direct matching algorithm"}
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "100%"
+# Install if missing: BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+library(circlize)
+# Make sure Gu are cited for the above libraries
+# [@gu2014]
+# [@gu2022]
+
+data <- read.csv("~/PycharmProjects/PenicillinX-Project/direct_match.csv", row.names = 1, check.names = FALSE)
+mat <- as.matrix(data)
+
+# Makes midline grey
+diag(mat) <- -1
+
+# Matches reference dataset
+col_fn = colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
+
+
+Heatmap(mat, 
+        name = "Match",
+        col = col_fn,
+        
+        # Labels
+        row_names_side = "left",      # Moves antibiotic labels to the Left
+        column_names_side = "top",    # Moves antibiotic labels to the Top
+        
+        # Grid
+        rect_gp = gpar(col = "black", lwd = 0.4), # Adds the black grid lines
+        cluster_rows = FALSE,         # Keep your specific list order
+        cluster_columns = FALSE,
+        
+        
+        # TEXT 
+        column_names_rot = 90,        # Vertical text for top labels
+        row_names_gp = gpar(fontsize = 8),
+        column_names_gp = gpar(fontsize = 8),
+        
+        show_heatmap_legend = FALSE,
+        
+# Matching the thick lines from reference dataset
+        layer_fun = function(j, i, x, y, width, height, fill) {
+          n_row = nrow(mat)
+          n_col = ncol(mat)
+          
+          # Vertical lines 
+          v_idx = seq(5, n_col - 1, by = 5)
+          if(length(v_idx) > 0) {
+            grid.segments(
+              x0 = unit(v_idx / n_col, "npc"), 
+              y0 = unit(0, "npc"),
+              x1 = unit(v_idx / n_col, "npc"), 
+              y1 = unit(1, "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+          
+          # Horizontal lines 
+          h_idx = seq(5, n_row - 1, by = 5)
+          if(length(h_idx) > 0) {
+            grid.segments(
+              x0 = unit(0, "npc"), 
+              y0 = unit(1 - (h_idx / n_row), "npc"),
+              x1 = unit(1, "npc"), 
+              y1 = unit(1 - (h_idx / n_row), "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+        }
+
+)
+```
+
+
+```{python RDKit_Dice_Threshold, echo=FALSE, include= TRUE}
+from rdkit import DataStructs
+from rdkit.Chem import rdFingerprintGenerator
+
+similarity_threshold = 0.7
+#print(f"Morgan Fingerprinting with Dice (Threshold: {similarity_threshold})")
+
+# 1. Initialize the modern Fingerprint Generator (Radius 2 = ECFP4)
+# fpSize=2048 is the standard default
+fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+
+# 2. Pre-convert SMILES to Mols
+mol_series = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+    lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+)
+
+# 3. Pre-generate Count Fingerprints using the new generator
+# GetCountFingerprint(m) creates the count-based vector needed for Dice
+fp_series = mol_series.apply(
+    lambda m: fp_gen.GetCountFingerprint(m) if m else None
+)
+
+names = ABxList
+matrix_df = pd.DataFrame(0, index=names, columns=names)
+
+for row_name in names:
+    row_fp = fp_series[row_name]
+    if row_fp is None:
+        continue
+
+    # 4. Calculate Dice Similarity with the threshold
+    matrix_df.loc[row_name] = fp_series.apply(
+        lambda col_fp: 1 if (col_fp and DataStructs.DiceSimilarity(row_fp, col_fp) >= similarity_threshold) else 0
+    )
+
+matrix_df.to_csv('MorganDice.csv', sep=',', index_label='Antibiotic')
+```
+<!-- Keep Adjacent-->
+```{r MorganDiceChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using Morgan Fingerprinting and Dice Similarity"}
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "100%"
+# Install if missing: BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+library(circlize)
+# Make sure Gu are cited for the above libraries
+# [@gu2014]
+# [@gu2022]
+
+data <- read.csv("~/PycharmProjects/PenicillinX-Project/MorganDice.csv", row.names = 1, check.names = FALSE)
+mat <- as.matrix(data)
+
+# Makes midline grey
+diag(mat) <- -1
+
+# Matches reference dataset
+col_fn = colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
+
+
+Heatmap(mat, 
+        name = "Match",
+        col = col_fn,
+        
+        # Labels
+        row_names_side = "left",      # Moves antibiotic labels to the Left
+        column_names_side = "top",    # Moves antibiotic labels to the Top
+        
+        # Grid
+        rect_gp = gpar(col = "black", lwd = 0.4), # Adds the black grid lines
+        cluster_rows = FALSE,         # Keep your specific list order
+        cluster_columns = FALSE,
+        
+        
+        # TEXT 
+        column_names_rot = 90,        # Vertical text for top labels
+        row_names_gp = gpar(fontsize = 8),
+        column_names_gp = gpar(fontsize = 8),
+        
+        show_heatmap_legend = FALSE,
+        
+# Matching the thick lines from reference dataset
+        layer_fun = function(j, i, x, y, width, height, fill) {
+          n_row = nrow(mat)
+          n_col = ncol(mat)
+          
+          # Vertical lines 
+          v_idx = seq(5, n_col - 1, by = 5)
+          if(length(v_idx) > 0) {
+            grid.segments(
+              x0 = unit(v_idx / n_col, "npc"), 
+              y0 = unit(0, "npc"),
+              x1 = unit(v_idx / n_col, "npc"), 
+              y1 = unit(1, "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+          
+          # Horizontal lines 
+          h_idx = seq(5, n_row - 1, by = 5)
+          if(length(h_idx) > 0) {
+            grid.segments(
+              x0 = unit(0, "npc"), 
+              y0 = unit(1 - (h_idx / n_row), "npc"),
+              x1 = unit(1, "npc"), 
+              y1 = unit(1 - (h_idx / n_row), "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+        }
+
+)
+```
+
