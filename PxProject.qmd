@@ -1,9 +1,15 @@
 ---
 title: "PenicillinX-Project"
 format: pdf
+toc: true
+header-includes:
+  - \usepackage[margin=1in]{geometry}
 ---
 
-```{r OriginalChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix re-created from X et al"}
+
+# Hutten et al.
+
+```{r OriginalChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix re-created from Hutten et al."}
 #| fig-width: 10
 #| fig-height: 10
 #| out-width: "100%"
@@ -42,7 +48,7 @@ Heatmap(mat,
         column_names_rot = 90,        # Vertical text for top labels
         row_names_gp = gpar(fontsize = 8),
         column_names_gp = gpar(fontsize = 8),
-        
+        column_title = "Hutten et al.",
         show_heatmap_legend = FALSE,
         
 # Matching the thick lines from reference dataset
@@ -78,11 +84,12 @@ Heatmap(mat,
 )
 ```
 
-
+# Direct Matching
 
 ```{python directMatchAlgorithm, echo=FALSE}
 import pandas as pd
 from rdkit import Chem
+import numpy as np
 
 abxData = pd.read_csv("antibiotics_data.csv")
 ABxList = abxData["Antibiotic"].tolist()
@@ -109,12 +116,13 @@ for row_name in names:
             col_mol.HasSubstructMatch(row_mol)
         )) else 0
     )
-
+np.fill_diagonal(matrix_df.values, -1) # Puts the -1 for the identical antibiotics
 matrix_df.to_csv('direct_match.csv', sep=',', index_label='Antibiotic')
 
 
 ```
 <!-- Keep adjacent-->
+## Direct Match Chart
 ```{r DirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using direct matching algorithm"}
 #| fig-width: 10
 #| fig-height: 10
@@ -154,7 +162,7 @@ Heatmap(mat,
         column_names_rot = 90,        # Vertical text for top labels
         row_names_gp = gpar(fontsize = 8),
         column_names_gp = gpar(fontsize = 8),
-        
+        column_title = "PenicillinX Direct Matching",
         show_heatmap_legend = FALSE,
         
 # Matching the thick lines from reference dataset
@@ -189,13 +197,68 @@ Heatmap(mat,
 
 )
 ```
+<!-- Keep adjacent-->
+```{r StatsDirectMatch, echo=FALSE, include=TRUE}
+library(reticulate)
+# Load and convert to matrix
+orig_mat <- as.matrix(read.csv("Original.csv", row.names=1))
+algo_mat <- as.matrix(read.csv("direct_match.csv", row.names=1))
+
+# Ensure identical dimensions/names
+algo_mat <- algo_mat[rownames(orig_mat), colnames(orig_mat)]
+
+# Calculate Hits
+MDhits <- list(
+  truePositives = sum(orig_mat == 1 & algo_mat == 1),
+  falsePositives = sum(orig_mat == 0 & algo_mat == 1),
+  falseNegatives = sum(orig_mat == 1 & algo_mat == 0),
+  discrepancyHit = sum(orig_mat == 2 & algo_mat == 1),
+  noDataHit     = sum(orig_mat == 3 & algo_mat == 1),
+  totalHits    = sum(algo_mat == 1),
+  possibleHits = sum(orig_mat ==1)
+)
 
 
-```{python RDKit_Dice_Threshold, echo=FALSE, include= TRUE}
+MDhits$hitRate <- round((MDhits$truePositives / MDhits$possibleHits) * 100, 2)
+
+# Reshape for a clean vertical table
+directMatchTable <- data.frame(
+  Metric = c("Possible Hits (Original)", "Total Hits (Algo)", "True Positives", 
+             "False Positives", "False Negatives", "No Data in Original", "Hit Rate (%)"),
+  Value  = c(MDhits$possibleHits, MDhits$totalHits, MDhits$truePositives, 
+             MDhits$falsePositives, MDhits$falseNegatives, MDhits$noDataHit, MDhits$hitRate)
+)
+
+
+
+#knitr::kable(directMatchTable,  label = "Direct Matching Results")
+
+#print(MDhits)
+
+```
+<!-- Keep adjacent-->
+
+\newpage
+
+Direct Matching calculates: \
+A total of `{r} MDhits$totalHits` cross reactions \
+out of a possible `{r} MDhits$possibleHits` hits from the original \
+This corresponds to `{r} MDhits$truePositives` true positives \
+and `{r} MDhits$falsePositives` false positives  \
+with `{r} MDhits$falseNegatives` false Negatives \
+and `{r} MDhits$noDataHit` for which there is no data in the original \
+True positive hitrate is `{r} round(MDhits[[1]] / MDhits[[7]] *100, 2) `%
+
+
+# Dice Similarity with Morgan Fingerprinting
+
+```{python RDKit_Dice_Threshold, echo=FALSE, include=TRUE}
 from rdkit import DataStructs
+import numpy as np
 from rdkit.Chem import rdFingerprintGenerator
-
-similarity_threshold = 0.7
+reactiveMatches = 0
+similarity_threshold = 0.667
+print(f"Morgan Fingerprinting with Dice Similarity (Threshold: {similarity_threshold})")
 #print(f"Morgan Fingerprinting with Dice (Threshold: {similarity_threshold})")
 
 # 1. Initialize the modern Fingerprint Generator (Radius 2 = ECFP4)
@@ -226,9 +289,11 @@ for row_name in names:
         lambda col_fp: 1 if (col_fp and DataStructs.DiceSimilarity(row_fp, col_fp) >= similarity_threshold) else 0
     )
 
+np.fill_diagonal(matrix_df.values, -1) # Puts the -1 for the identical antibiotics
 matrix_df.to_csv('MorganDice.csv', sep=',', index_label='Antibiotic')
 ```
 <!-- Keep Adjacent-->
+## Morgan-Dice Chart
 ```{r MorganDiceChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using Morgan Fingerprinting and Dice Similarity"}
 #| fig-width: 10
 #| fig-height: 10
@@ -244,7 +309,7 @@ data <- read.csv("~/PycharmProjects/PenicillinX-Project/MorganDice.csv", row.nam
 mat <- as.matrix(data)
 
 # Makes midline grey
-diag(mat) <- -1
+# diag(mat) <- -1 no longer needed
 
 # Matches reference dataset
 col_fn = colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
@@ -262,7 +327,7 @@ Heatmap(mat,
         rect_gp = gpar(col = "black", lwd = 0.4), # Adds the black grid lines
         cluster_rows = FALSE,         # Keep your specific list order
         cluster_columns = FALSE,
-        
+        column_title = "Dice similarity with Morgan Fingerprinting",
         
         # TEXT 
         column_names_rot = 90,        # Vertical text for top labels
@@ -302,5 +367,427 @@ Heatmap(mat,
         }
 
 )
+```
+<!-- Keep adjacent-->
+```{r StatsMorganDice, echo=FALSE, include=TRUE}
+library(reticulate)
+# Load and convert to matrix
+orig_mat <- as.matrix(read.csv("Original.csv", row.names=1))
+algo_mat <- as.matrix(read.csv("MorganDice.csv", row.names=1))
+
+# Ensure identical dimensions/names
+algo_mat <- algo_mat[rownames(orig_mat), colnames(orig_mat)]
+
+# Calculate Hits
+MDhits <- list(
+  truePositives = sum(orig_mat == 1 & algo_mat == 1),
+  falsePositives = sum(orig_mat == 0 & algo_mat == 1),
+  falseNegatives = sum(orig_mat == 1 & algo_mat == 0),
+  discrepancyHit = sum(orig_mat == 2 & algo_mat == 1),
+  noDataHit     = sum(orig_mat == 3 & algo_mat == 1),
+  totalHits    = sum(algo_mat == 1),
+  possibleHits = sum(orig_mat ==1)
+)
+
+threshold_value <- py$similarity_threshold
+
+MDhits$hitRate <- round((MDhits$truePositives / MDhits$possibleHits) * 100, 2)
+
+# Reshape for a clean vertical table
+morganDiceTable <- data.frame(
+  Metric = c("Possible Hits (Original)", "Total Hits (Algo)", "True Positives", 
+             "False Positives", "False Negatives", "No Data in Original", "Hit Rate (%)"),
+  Value  = c(MDhits$possibleHits, MDhits$totalHits, MDhits$truePositives, 
+             MDhits$falsePositives, MDhits$falseNegatives, MDhits$noDataHit, MDhits$hitRate)
+)
+
+
+
+#knitr::kable(morganDiceTable,  label = "PharmacoDice Results")
+
+
+```
+<!-- Keep adjacent-->
+
+\newpage
+
+Dice similarity with Morgan Fingerprinting at a similarity threshold of `{r} threshold_value` calculates: \
+A total of `{r} MDhits$totalHits` cross reactions \
+out of a possible `{r} MDhits$possibleHits` hits from the original \
+This corresponds to `{r} MDhits$truePositives` true positives \
+and `{r} MDhits$falsePositives` false positives  \
+with `{r} MDhits$falseNegatives` false Negatives \
+and `{r} MDhits$noDataHit` for which there is no data in the original \
+True positive hitrate is `{r} round(MDhits[[1]] / MDhits[[7]] *100, 2) `%
+
+
+
+
+
+
+# Tanimoto similarity
+
+```{python MorganTanimoto, echo=FALSE, include=TRUE}
+from rdkit import DataStructs
+import numpy as np
+from rdkit.Chem import rdFingerprintGenerator
+reactiveMatches = 0
+similarity_threshold = 0.5
+print(f"Morgan Fingerprinting with Tanimoto Similarity (Threshold: {similarity_threshold})")
+#print(f"Morgan Fingerprinting with Dice (Threshold: {similarity_threshold})")
+
+# 1. Initialize the modern Fingerprint Generator (Radius 2 = ECFP4)
+# fpSize=2048 is the standard default
+fp_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+
+# 2. Pre-convert SMILES to Mols
+mol_series = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+    lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+)
+
+# 3. Pre-generate Count Fingerprints using the new generator
+# GetCountFingerprint(m) creates the count-based vector needed for Dice
+fp_series = mol_series.apply(
+    lambda m: fp_gen.GetCountFingerprint(m) if m else None
+)
+
+names = ABxList
+matrix_df = pd.DataFrame(0, index=names, columns=names)
+
+for row_name in names:
+    row_fp = fp_series[row_name]
+    if row_fp is None:
+        continue
+
+    # 4. Calculate Dice Similarity with the threshold
+    matrix_df.loc[row_name] = fp_series.apply(
+        lambda col_fp: 1 if (col_fp and DataStructs.TanimotoSimilarity(row_fp, col_fp) >= similarity_threshold) else 0
+    )
+
+np.fill_diagonal(matrix_df.values, -1) # Puts the -1 for the identical antibiotics
+matrix_df.to_csv('MorganTanimoto.csv', sep=',', index_label='Antibiotic')
+```
+<!-- Keep Adjacent-->
+## Morgan-Tanimoto Chart
+```{r MorganTanimotoChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using Morgan Fingerprinting and Dice Similarity"}
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "100%"
+# Install if missing: BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+library(circlize)
+# Make sure Gu are cited for the above libraries
+# [@gu2014]
+# [@gu2022]
+
+data <- read.csv("~/PycharmProjects/PenicillinX-Project/MorganTanimoto.csv", row.names = 1, check.names = FALSE)
+mat <- as.matrix(data)
+
+# Makes midline grey
+# diag(mat) <- -1 no longer needed
+
+# Matches reference dataset
+col_fn = colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
+
+
+Heatmap(mat, 
+        name = "Match",
+        col = col_fn,
+        
+        # Labels
+        row_names_side = "left",      # Moves antibiotic labels to the Left
+        column_names_side = "top",    # Moves antibiotic labels to the Top
+        
+        # Grid
+        rect_gp = gpar(col = "black", lwd = 0.4), # Adds the black grid lines
+        cluster_rows = FALSE,         # Keep your specific list order
+        cluster_columns = FALSE,
+        column_title = "Tanimoto similarity with Morgan Fingerprinting",
+        
+        # TEXT 
+        column_names_rot = 90,        # Vertical text for top labels
+        row_names_gp = gpar(fontsize = 8),
+        column_names_gp = gpar(fontsize = 8),
+        
+        show_heatmap_legend = FALSE,
+        
+# Matching the thick lines from reference dataset
+        layer_fun = function(j, i, x, y, width, height, fill) {
+          n_row = nrow(mat)
+          n_col = ncol(mat)
+          
+          # Vertical lines 
+          v_idx = seq(5, n_col - 1, by = 5)
+          if(length(v_idx) > 0) {
+            grid.segments(
+              x0 = unit(v_idx / n_col, "npc"), 
+              y0 = unit(0, "npc"),
+              x1 = unit(v_idx / n_col, "npc"), 
+              y1 = unit(1, "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+          
+          # Horizontal lines 
+          h_idx = seq(5, n_row - 1, by = 5)
+          if(length(h_idx) > 0) {
+            grid.segments(
+              x0 = unit(0, "npc"), 
+              y0 = unit(1 - (h_idx / n_row), "npc"),
+              x1 = unit(1, "npc"), 
+              y1 = unit(1 - (h_idx / n_row), "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+        }
+
+)
+```
+<!-- Keep adjacent-->
+```{r StatsMorganTanimoto, echo=FALSE, include=TRUE}
+#| tbl-cap: "Results"
+library(gt)
+
+# Load and convert to matrix
+orig_mat <- as.matrix(read.csv("Original.csv", row.names=1))
+algo_mat <- as.matrix(read.csv("MorganTanimoto.csv", row.names=1))
+
+# Ensure identical dimensions/names
+algo_mat <- algo_mat[rownames(orig_mat), colnames(orig_mat)]
+
+# Calculate Hits
+MDhits <- list(
+  possibleHits = sum(orig_mat ==1),
+  totalHits    = sum(algo_mat == 1),
+  truePositives = sum(orig_mat == 1 & algo_mat == 1),
+  falsePositives = sum(orig_mat == 0 & algo_mat == 1),
+  falseNegatives = sum(orig_mat == 1 & algo_mat == 0),
+  discrepancyHit = sum(orig_mat == 2 & algo_mat == 1),
+  noDataHit     = sum(orig_mat == 3 & algo_mat == 1)
+)
+
+
+threshold_value <- py$similarity_threshold
+
+MDhits$hitRate <- round((MDhits$truePositives / MDhits$possibleHits) * 100, 2)
+
+# Reshape for a clean vertical table
+morganTanimotoTable <- data.frame(
+  Metric = c("Possible Hits (Original)", "Total Hits (Algo)", "True Positives", 
+             "False Positives", "False Negatives", "No Data in Original", "Hit Rate (%)"),
+  Value  = c(MDhits$possibleHits, MDhits$totalHits, MDhits$truePositives, 
+             MDhits$falsePositives, MDhits$falseNegatives, MDhits$noDataHit, MDhits$hitRate)
+)
+
+
+
+#knitr::kable(morganTanimotoTable,  caption = "Cross-Reactivity Analysis Results")
+
+
+#print(MDhits)
+
+
+
+
+
+```
+<!-- Keep adjacent-->
+
+\newpage
+<!--
+Dice similarity with Tanimoto Fingerprinting at a similarity threshold of `{r} MDhits$threshold_value` calculates: \
+A total of `{r} MDhits$totalHits` cross reactions \
+out of a possible `{r} MDhits$possibleHits` hits from the original \
+This corresponds to `{r} MDhits$truePositives` true positives \
+and `{r} MDhits$falsePositives` false positives  \
+with `{r} MDhits$falseNegatives` false Negatives \
+and `{r} MDhits$noDataHit` for which there is no data in the original \
+True positive hitrate is `{r} round(MDhits[[3]] / MDhits[[1]] *100, 2) `%
+
+
+-->
+
+
+# Pharmacophore fingerprinting
+
+```{python  PharmacophoreDice, echo=FALSE, include=TRUE}
+from rdkit import Chem
+from rdkit import DataStructs
+from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
+import pandas as pd
+import numpy as np
+
+# Parameters
+similarity_threshold = 0.667
+print(f"Pharmacophore Fingerprinting with Dice (Threshold: {similarity_threshold})")
+
+# 1. Access the pre-configured Gobbi factory
+factory = Gobbi_Pharm2D.factory
+
+# 2. Pre-convert SMILES to Mols
+mol_series = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+    lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+)
+
+# 3. Pre-generate Pharmacophore Fingerprints
+# Using Gen2DFingerprint as verified in your working example
+fp_series = mol_series.apply(
+    lambda m: Generate.Gen2DFingerprint(m, factory) if m else None
+)
+
+names = ABxList
+matrix_df = pd.DataFrame(0, index=names, columns=names)
+
+# 4. Compute the similarity matrix
+for row_name in names:
+    row_fp = fp_series[row_name]
+    if row_fp is None:
+        continue
+
+    # DiceSimilarity is calculated between the pharmacophore fingerprints
+    matrix_df.loc[row_name] = fp_series.apply(
+        lambda col_fp: 1 if (col_fp and DataStructs.DiceSimilarity(row_fp, col_fp) >= similarity_threshold) else 0
+    )
+
+# 5. Mirror the R identity diagonal
+np.fill_diagonal(matrix_df.values, -1)
+
+# 6. Export to CSV
+matrix_df.to_csv('PharmacoDice.csv', sep=',', index_label='Antibiotic')
+    
+```
+<!--Keep adjacent-->
+## Pharmacophore-Dice Chart
+```{r PharmacophoreChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using Pharmacophore and Dice Similarity"}
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "100%"
+# Install if missing: BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+library(circlize)
+# Make sure Gu are cited for the above libraries
+# [@gu2014]
+# [@gu2022]
+
+data <- read.csv("~/PycharmProjects/PenicillinX-Project/PharmacoDice.csv", row.names = 1, check.names = FALSE)
+mat <- as.matrix(data)
+
+# Makes midline grey
+# diag(mat) <- -1 no longer needed
+
+# Matches reference dataset
+col_fn = colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
+
+
+Heatmap(mat, 
+        name = "Match",
+        col = col_fn,
+        
+        # Labels
+        row_names_side = "left",      # Moves antibiotic labels to the Left
+        column_names_side = "top",    # Moves antibiotic labels to the Top
+        
+        # Grid
+        rect_gp = gpar(col = "black", lwd = 0.4), # Adds the black grid lines
+        cluster_rows = FALSE,         # Keep your specific list order
+        cluster_columns = FALSE,
+        column_title = "Pharmacophore similarity with Dice Fingerprinting",
+        
+        # TEXT 
+        column_names_rot = 90,        # Vertical text for top labels
+        row_names_gp = gpar(fontsize = 8),
+        column_names_gp = gpar(fontsize = 8),
+        
+        show_heatmap_legend = FALSE,
+        
+# Matching the thick lines from reference dataset
+        layer_fun = function(j, i, x, y, width, height, fill) {
+          n_row = nrow(mat)
+          n_col = ncol(mat)
+          
+          # Vertical lines 
+          v_idx = seq(5, n_col - 1, by = 5)
+          if(length(v_idx) > 0) {
+            grid.segments(
+              x0 = unit(v_idx / n_col, "npc"), 
+              y0 = unit(0, "npc"),
+              x1 = unit(v_idx / n_col, "npc"), 
+              y1 = unit(1, "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+          
+          # Horizontal lines 
+          h_idx = seq(5, n_row - 1, by = 5)
+          if(length(h_idx) > 0) {
+            grid.segments(
+              x0 = unit(0, "npc"), 
+              y0 = unit(1 - (h_idx / n_row), "npc"),
+              x1 = unit(1, "npc"), 
+              y1 = unit(1 - (h_idx / n_row), "npc"),
+              gp = gpar(lwd = 1.4, col = "black")
+            )
+          }
+        }
+
+)
+```
+<!-- Keep adjacent-->
+```{r StatsPharmacoDice, echo=FALSE, include=TRUE}
+#| tbl-cap: "Results"
+library(gt)
+
+# Load and convert to matrix
+orig_mat <- as.matrix(read.csv("Original.csv", row.names=1))
+algo_mat <- as.matrix(read.csv("PharmacoDice.csv", row.names=1))
+
+# Ensure identical dimensions/names
+algo_mat <- algo_mat[rownames(orig_mat), colnames(orig_mat)]
+
+# Calculate Hits
+MDhits <- list(
+  possibleHits = sum(orig_mat ==1),
+  totalHits    = sum(algo_mat == 1),
+  truePositives = sum(orig_mat == 1 & algo_mat == 1),
+  falsePositives = sum(orig_mat == 0 & algo_mat == 1),
+  falseNegatives = sum(orig_mat == 1 & algo_mat == 0),
+  discrepancyHit = sum(orig_mat == 2 & algo_mat == 1),
+  noDataHit     = sum(orig_mat == 3 & algo_mat == 1)
+)
+
+
+threshold_value <- py$similarity_threshold
+
+MDhits$hitRate <- round((MDhits$truePositives / MDhits$possibleHits) * 100, 2)
+
+# Reshape for a clean vertical table
+pharmacoDiceTable <- data.frame(
+  Metric = c("Possible Hits (Original)", "Total Hits (Algo)", "True Positives", 
+             "False Positives", "False Negatives", "No Data in Original", "Hit Rate (%)"),
+  Value  = c(MDhits$possibleHits, MDhits$totalHits, MDhits$truePositives, 
+             MDhits$falsePositives, MDhits$falseNegatives, MDhits$noDataHit, MDhits$hitRate)
+)
+
+
+
+#knitr::kable(pharmacoDiceTable,  label = "PharmacoDice Results")
+
+
+#print(MDhits)
+
+
+
+
+
+```
+
+
+# Results
+
+```{r}
+knitr::kable(directMatchTable,  label = "Direct Match Results")
+knitr::kable(morganDiceTable,  label = "Morgan-Dice Results")
+knitr::kable(morganTanimotoTable,  label = "Morgan-Tanimoto Results")
+knitr::kable(pharmacoDiceTable,  label = "PharmacoDice Results")
 ```
 
