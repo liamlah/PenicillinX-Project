@@ -621,7 +621,7 @@ import numpy as np
 similarity_threshold = 0.667
 print(f"Pharmacophore Fingerprinting with Dice (Threshold: {similarity_threshold})")
 
-# 1. Access the pre-configured Gobbi factory
+# 1. Access the pre-configured Gobbi factore
 factory = Gobbi_Pharm2D.factory
 
 # 2. Pre-convert SMILES to Mols
