@@ -8,6 +8,7 @@ header-includes:
 
 
 
+# Hutten et al.
 
 ```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix re-created from Hutten et al."}
 #| label: OriginalChart
@@ -23,13 +24,13 @@ calculateStats <- function(csvPath, originalMat) {
   algoMat <- algoMat[rownames(originalMat), colnames(originalMat)]
   
   list(
-    possibleHits   = sum(originalMat == 1),
-    totalHits      = sum(algoMat == 1),
-    truePositives  = sum(originalMat == 1 & algoMat == 1),
-    trueNegatives  = sum(originalMat == 0 & algoMat == 0),
-    falsePositives = sum(originalMat == 0 & algoMat == 1),
-    falseNegatives = sum(originalMat == 1 & algoMat == 0),
-    noDataHit      = sum(originalMat == 3 & algoMat == 1),
+    possibleHits   = sum(originalMat == 1) /2,
+    totalHits      = sum(algoMat == 1) /2,
+    truePositives  = sum(originalMat == 1 & algoMat == 1) /2,
+    trueNegatives  = sum(originalMat == 0 & algoMat == 0) /2,
+    falsePositives = sum(originalMat == 0 & algoMat == 1) /2,
+    falseNegatives = sum(originalMat == 1 & algoMat == 0) /2,
+    noDataHit      = sum(originalMat == 3 & algoMat == 1) /2,
  #   hitRate        = round((sum(originalMat == 1 & algoMat == 1) / sum(originalMat == 1)),  2),
     sensitivity    = round(sum(originalMat == 1 & algoMat == 1) / (sum(originalMat == 1 & algoMat == 1) + sum(originalMat == 1 & algoMat == 0)),2),
     specificity    = round(sum(originalMat == 0 & algoMat == 0) / (sum(originalMat == 0 & algoMat == 0) + sum(originalMat == 0 & algoMat == 1)),3)
@@ -74,10 +75,10 @@ plotAbxHeatmap <- function(csvPath, chartTitle, colMapping) {
 }
 ```
 
-@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al. Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm is displayed in a table at the end.
+@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al. Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al. is displayed in a table at the end of the document.
 
 
-<!--## algoblock -->
+
 
 ```{python algoBlock, include=TRUE, echo=FALSE}
 import pandas as pd
@@ -173,7 +174,8 @@ save_matrix(mcsDf, 'mcsOverlap.csv')
 
 ```
 
-# Hutten et al.
+
+
 
 ```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using direct matching algorithm"}
 #| label: fig-huttenChart
@@ -241,7 +243,56 @@ plotAbxHeatmap("mcsOverlap.csv", "Maximum Common Substructure Overlap", colorRam
 mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 ```
 
+```{python ensembleMaker, echo=FALSE}
+import pandas as pd
+import numpy as np
+
+# Add existing charts
+files = ["directMatch.csv", "morganTanimoto.csv", "morganDice.csv", 
+         "pharmacoDice.csv", "maccsTanimoto.csv"]
+# , "mcsOverlap.csv" - Currently removed as sensitivity+specificity lower than MACCS
+
+# Set index
+dataframes = [pd.read_csv(f, index_col=0) for f in files]
+
+#set true if ANY matrix has a 1
+ensembleMask = (dataframes[0] == 1)
+for df in dataframes[1:]:
+    ensembleMask |= (df == 1)
+
+# Convert Boolean to Integers
+ensembleDf = ensembleMask.astype(int)
+
+# Adds the -1s back down middle
+np.fill_diagonal(ensembleDf.values, -1)
+
+ensembleDf.to_csv("ensembleMatch.csv")
+
+
+```
+
+# All algorithms combined
+
+```{r ensemble, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Maximum Common Substructure"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("ensembleMatch.csv", "all algos combined (MCS currently removed)", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
+```
+
+# Hutten sine discrepant
+
+```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Hutten with discrepants set to nil"}
+#| label: fig-huttensineDiscrepant
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#A9D08F","#FFFFFF")))
+```
+
+
 \newpage
+
+# Performance Table
 
 ```{python, echo=FALSE, include=TRUE}
 #| label: performance-table
@@ -250,43 +301,70 @@ mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 from IPython.display import Markdown
 from tabulate import tabulate
 
-# Access R lists using the 'r' prefix
-# These behave like dictionaries in Python
+# Reminder: access R lists using the 'r.' prefix
+
 dm = r.directMatchStats
 md = r.morganDiceStats
 mt = r.morganTanimotoStats
 pd = r.pharmacoDiceStats
 mcs = r.mcsStats
 mct = r.maccsTanimotoStats
-
-# Define the rows of the table
+ens = r.ensembleStats
+# Table rows
 table = [
-    ["Set Threshold", ['N/A'], [thresholdMD], ['thresholdMT'],  ['thresholdPhD'], ['thresholdMCS'],  ['thresholdMAC']],   
-    ["Possible Hits", dm['possibleHits'], md['possibleHits'], mt['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"]],
-    ["Total Hits",    dm['totalHits'],    md['totalHits'],    mt['totalHits'],    pd['totalHits'], mcs['totalHits'], mct["totalHits"]],
-    ["True +ve",dm['truePositives'],md['truePositives'],mt['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"]],
-    ["False +ve",dm['falsePositives'],md['falsePositives'],mt['falsePositives'],pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"]],
-    ["False -ve",dm['falseNegatives'],md['falseNegatives'],mt['falseNegatives'],pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"]],
-    ["no Data", dm['noDataHit'], md['noDataHit'], mt['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"]],
-  #  ["Hit Rate", dm['hitRate'], md['hitRate'], mt['hitRate'], pd['hitRate'], mcs['hitRate'], mct["hitRate"]],
-    ["Sensitivity", dm['sensitivity'], md['sensitivity'], mt['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity']],
-    ["Specificity", dm['specificity'], md['specificity'], mt['specificity'], pd['specificity'], mcs['specificity'], mct['specificity']]
+    ["Set Threshold", 'N/A', thresholdMD, thresholdMT,  thresholdPhD, thresholdMCS,  thresholdMAC, 'N/A'],   
+    ["Possible Hits", dm['possibleHits'], md['possibleHits'], mt['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"],ens['possibleHits']],
+    ["Total Hits",    dm['totalHits'],    md['totalHits'],    mt['totalHits'],    pd['totalHits'], mcs['totalHits'], mct["totalHits"],ens['totalHits']],
+    ["True +ve",dm['truePositives'],md['truePositives'],mt['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"],ens['truePositives']],
+    ["False +ve",dm['falsePositives'],md['falsePositives'],mt['falsePositives'],pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"],ens['falsePositives']],
+    ["False -ve",dm['falseNegatives'],md['falseNegatives'],mt['falseNegatives'],pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"],ens['falseNegatives']],
+    ["no Data", dm['noDataHit'], md['noDataHit'], mt['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"],ens['noDataHit']],
+    ["Sensitivity", dm['sensitivity'], md['sensitivity'], mt['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity'],ens['sensitivity']],
+    ["Specificity", dm['specificity'], md['specificity'], mt['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'],ens['specificity']]
     ]
 
 
-# Create the headers
-headers = ["Metric", "Direct Match", "Morgan Dice", "Morgan Tanimoto", "Pharmaco Dice", "MCS", "MACCS Tanimoto"]
+
+# headers
+headers = ["Metric", "Direct Match", "Morgan Dice", "Morgan Tanimoto", "Pharmaco Dice", "MCS", "MACCS Tanimoto", "Ensemble"]
 
 # Render the table
 Markdown(tabulate(table, headers=headers, tablefmt="pipe"))
 ```
 
+```{python, echo=FALSE, Include=TRUE}
+import pandas as pd
+import numpy as np
 
+# 1. Load the data
+# Use the same paths you used in your previous blocks
+ensembleDf = pd.read_csv("ensembleMatch.csv", index_col=0)
+originalDf = pd.read_csv("Original.csv", index_col=0)
 
+# 2. Align the dataframes to ensure drug names match exactly across rows/cols
+# This prevents errors if the drug order differs between files
+common_idx = originalDf.index.intersection(ensembleDf.index)
+common_cols = originalDf.columns.intersection(ensembleDf.columns)
 
+orig_aligned = originalDf.loc[common_idx, common_cols]
+ens_aligned = ensembleDf.loc[common_idx, common_cols]
 
+# 3. Find where Ensemble=1 and Original=3
+# This creates a boolean mask
+noDataMask = (ens_aligned == 1) & (orig_aligned == 3)
 
+# 4. Extract the names of the pairs
+rows, cols = np.where(noDataMask)
+noDataPairs = set()
 
+for r, c in zip(rows, cols):
+    # Sort to ensure (DrugA, DrugB) is the same as (DrugB, DrugA)
+    pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
+    noDataPairs.add(pair)
 
-
+# 5. Output the results as text
+print(f"Found {len(noDataPairs)} potential cross-reactions with no clinical data in Hutten et al.:\n")
+for abx1, abx2 in sorted(list(noDataPairs)):
+    markdown(print(f"- {abx1} and {abx2}"))
+```
 
