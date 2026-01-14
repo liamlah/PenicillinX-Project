@@ -365,6 +365,6 @@ for r, c in zip(rows, cols):
 # 5. Output the results as text
 print(f"Found {len(noDataPairs)} potential cross-reactions with no clinical data in Hutten et al.:\n")
 for abx1, abx2 in sorted(list(noDataPairs)):
-    markdown(print(f"- {abx1} and {abx2}"))
+    print(f"- {abx1} and {abx2}")
 ```
 
