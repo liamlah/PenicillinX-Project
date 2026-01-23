@@ -3,7 +3,7 @@ Amoxicillin,Penicillin,Acyl,TRUE,Thiazolidine Ring,[H][C@@]1(NC(=O)[C@H](N)C2=CC
 Ampicillin,Penicillin,Acyl,TRUE,Thiazolidine Ring,[H][C@@]1(NC(=O)[C@H](N)C2=CC=CC=C2)C(=O)N2[C@@H](C(O)=O)C(C)(C)S[C@]12[H],N[C@@H](C(N)=O)C1=CC=CC=C1,NaN,NaN,CC(C)(S)CC(O)=O,,
 Aztreonam,Monobactam,UniqueSideChain,TRUE,Monobactam Core,C[C@H]1[C@H](NC(=O)C(=N/OC(C)(C)C(O)=O)\C2=CSC(N)=N2)C(=O)N1S(O)(=O)=O,CC(C)(O\N=C(/C(N)=O)C1=CSC(N)=N1)C(O)=O,NaN,OS(=O)=O,NaN,,
 Cefaclor,2nd Gen Cephalosporin,Acyl,TRUE,Dihydrothiazine Ring,[H][C@]12SCC(Cl)=C(N1C(=O)[C@@]2([H])NC(=O)[C@H](N)C1=CC=CC=C1)C(O)=O,N[C@@H](C(N)=O)C1=CC=CC=C1,Cl,NaN,OC(=O)\C=C\CS,,
-Cefadroxil,1st Gen Cephalosporin,Acyl,TRUE,Dihydrothiazine Ring,O.[H][C@]12SCC(C)=C(N1C(=O)[C@@]2([H])NC(=O)[C@H](N)C1=CC=C(O)C=C1)C(O)=O,O.N[C@@H](C(N)=O)C1=CC=C(O)C=C1,NaN,NaN,C\C(CS)=C/C(O)=O,,
+Cefadroxil,1st Gen Cephalosporin,Acyl,TRUE,Dihydrothiazine Ring,[H][C@]12SCC(C)=C(N1C(=O)[C@@]2([H])NC(=O)[C@H](N)C1=CC=C(O)C=C1)C(O)=O,N[C@@H](C(N)=O)C1=CC=C(O)C=C1,NaN,NaN,C\C(CS)=C/C(O)=O,,
 Cefamandole,2nd Gen Cephalosporin,Acyl,TRUE,Dihydrothiazine Ring,[H][C@]12SCC(CSC3=NN=NN3C)=C(N1C(=O)[C@@]2([H])NC(=O)[C@H](O)C1=CC=CC=C1)C(O)=O,NC(=O)[C@H](O)C1=CC=CC=C1,CSC1=NN=NN1C,NaN,OC(=O)\C=C\CS,,
 Cefamet,2nd Gen Cephalosporin,Acyl,TRUE,Dihydrothiazine Ring,[H][C@@]1(NC(=O)C(=N/OC)\C2=CSC(N)=N2)C(=O)N2C(C(O)=O)=C(C)CS[C@]12[H],CO\N=C(/C(N)=O)C1=CSC(N)=N1,NaN,NaN,C\C(CS)=C/C(O)=O,,
 Cefatrizine,1st Gen Cephalosporin,Acyl,TRUE,Dihydrothiazine Ring,[H][C@@]1(NC(=O)[C@H](N)C2=CC=C(O)C=C2)C(=O)N2C(C(O)=O)=C(CSC3=CNN=N3)CS[C@]12[H],N[C@@H](C(N)=O)C1=CC=C(O)C=C1,CSC1=CNN=N1,NaN,OC(=O)\C=C\CS,,
