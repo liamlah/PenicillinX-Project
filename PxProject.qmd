@@ -1,6 +1,9 @@
 ---
 title: "PenicillinX-Project"
-format: pdf
+format:
+  pdf:
+    cite-method: citeproc
+    link-citations: true
 bibliography: My Library.bib
 csl: https://www.zotero.org/styles/american-medical-association
 toc: true
@@ -36,8 +39,10 @@ calculateStats <- function(csvPath, originalMat) {
     falseNegatives = sum(originalMat == 1 & algoMat == 0) /2,
     noDataHit      = sum(originalMat == 3 & algoMat == 1) /2,
 #   hitRate        = round((sum(originalMat == 1 & algoMat == 1) / sum(originalMat == 1)),  2),
-    sensitivity    = round(sum(originalMat == 1 & algoMat == 1) / (sum(originalMat == 1 & algoMat == 1) + sum(originalMat == 1 & algoMat == 0)),2),
-    specificity    = round(sum(originalMat == 0 & algoMat == 0) / (sum(originalMat == 0 & algoMat == 0) + sum(originalMat == 0 & algoMat == 1)),3)
+    sensitivity    = round(sum(originalMat == 1 & algoMat == 1) / (sum(originalMat == 1 & algoMat == 1) + sum(originalMat == 1 & algoMat == 0)),3),
+    specificity    = round(sum(originalMat == 0 & algoMat == 0) / (sum(originalMat == 0 & algoMat == 0) + sum(originalMat == 0 & algoMat == 1)),3),
+    youdensJ       = round((sum(originalMat == 1 & algoMat == 1) / (sum(originalMat == 1 & algoMat == 1) + sum(originalMat == 1 & algoMat == 0))) + 
+                   (sum(originalMat == 0 & algoMat == 0) / (sum(originalMat == 0 & algoMat == 0) + sum(originalMat == 0 & algoMat == 1))) - 1, 3)
   )
 }
 
@@ -79,7 +84,7 @@ plotAbxHeatmap <- function(csvPath, chartTitle, colMapping) {
 }
 ```
 
-@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al. Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al. is displayed in a table at the end of the document.
+@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al[@hutten2025] Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al is displayed in a table at the end of the document. *This matrix was reconstructed by hand, and though it was checked for consistency against the original, it can't be guaranteed that it is free from transcription error.*
 
 
 
@@ -98,7 +103,7 @@ from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
 thresholdMD = 0.667 # 100% Specificity at 0.667
 thresholdMT = 0.667 # 100% Specificity at 0.667
 thresholdPhD = 0.667 # 100% Specificity at 0.667
-thresholdMAC = 0.667 # 100% Specificity at 0.667
+thresholdMAC = 0.70 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity
 thresholdMCS = 0.85 #  # 100% Specificity at TBD
 ####### -------------------- ########################
 
@@ -147,14 +152,14 @@ for row in names:
         )
 save_matrix(pharmDf, 'pharmacoDice.csv')
 
-# MACCS Keys 
+# MACCS Keys # remember to change all references to DICE at some point
 maccsFpSeries = molSeries.apply(lambda m: MACCSkeys.GenMACCSKeys(m) if m else None)
 maccsDf = pd.DataFrame(0, index=names, columns=names)
 for row in names:
     f1 = maccsFpSeries[row]
     if f1:
         maccsDf.loc[row] = maccsFpSeries.apply(
-            lambda f2: 1 if (f2 and DataStructs.TanimotoSimilarity(f1, f2) >= thresholdMAC) else 0
+            lambda f2: 1 if (f2 and DataStructs.DiceSimilarity(f1, f2) >= thresholdMAC) else 0
         )
 save_matrix(maccsDf, 'maccsTanimoto.csv')
 
@@ -162,7 +167,7 @@ save_matrix(maccsDf, 'maccsTanimoto.csv')
 # use atom counts to check if a significant core is shared
 mcsDf = pd.DataFrame(0, index=names, columns=names)
 mcsThreshold = thresholdMCS
-
+# todo: Test different switches as per https://www.rdkit.org/docs/source/rdkit.Chem.fmcs.fmcs.html
 for i, rowName in enumerate(names):
     m1 = molSeries[rowName]
     if not m1: continue
@@ -182,7 +187,7 @@ save_matrix(mcsDf, 'mcsOverlap.csv')
 ```
 
 ```{python}
-#| label: Permissive-Matching
+#| label: PermissiveMatching
 #| echo: false
 #| include: true
 import pandas as pd
@@ -236,7 +241,7 @@ for i, rowName in enumerate(names):
         queryRow = Chem.MolFromSmarts(rowQueryStr)
         queryCol = Chem.MolFromSmarts(colQueryStr)
         
-        # Symmetric check: A matches B_query OR B matches A_query
+        # Symmetric check: A matches query for B OR B matches query for A
         if (queryCol and rowMol.HasSubstructMatch(queryCol)) or \
            (queryRow and colMol.HasSubstructMatch(queryRow)):
             permissiveMatchDf.iloc[i, j] = 1
@@ -251,7 +256,7 @@ save_matrix(permissiveMatchDf, 'permissiveDirectMatch.csv')
 
 
 
-```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using direct matching algorithm"}
+```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix manually re-created from Hutten et al."}
 #| label: fig-huttenChart
 #| fig-width: 10
 #| fig-height: 10
@@ -259,10 +264,23 @@ plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c(
 ```
 \newpage
 
+# Direct Matching (PenicillinX Original)
 
-# Permissive Direct Matching using SMARTS substitutions
+The existing direct matching algorithm from PenicillinX web app.[@liamjones2025] Compares molecular structures directly using graph based comparisons of side chain SMILES. Sensitivity is limited, and often does not account for R1 alterations in side chain moieties that do not change allergenic potential.
 
-Matching algorithm similar to original PenicillinX, but instead using SMARTS queries and additionally substituting like atoms such as halogens (ie flucloxacillin-dicloxacillin) as well as methylene and ethers.
+```{r DirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using PenicillinX direct matching algorithm"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("directMatch.csv", "Direct Matching", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+directMatchStats <- calculateStats("directMatch.csv", huttenMat) # 'mat' is from Hutten et al.
+
+```
+
+
+\newpage
+# Permissive Direct Matching (PDM) using SMARTS substitutions
+
+A Matching algorithm similar to original PenicillinX,[@liamjones2025] but instead using SMARTS pattern matching.[@daylightchemicalinformationsystemsinc11] It implements bioisosteric substitution for features with similar expected behaviour specifically treating halogens as a united class (i.e. flucloxacillin-dicloxacillin) as well as methylene and ether linkages. (i.e. Penicillin G-VK). Continued work on this method shows promise in increasing the sensitivity of the algorithm while minimising loss to specificity.
 
 ```{r PermissiveDirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using an improved, more pemissive matching algorithm"}
 #| fig-width: 10
@@ -270,24 +288,12 @@ Matching algorithm similar to original PenicillinX, but instead using SMARTS que
 plotAbxHeatmap("permissiveDirectMatch.csv", "Permissive Direct Matching", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 permissiveDirectMatchStats <- calculateStats("permissiveDirectMatch.csv", huttenMat) # 'mat' is from Hutten et al.
 ```
-\newpage
 
-# Direct Matching (PenicillinX original)
-
-The existing direct matching algorithm from PenicillinX web app. Compares molecular structures directly using SMILES
-
-```{r DirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using direct matching algorithm"}
-#| fig-width: 10
-#| fig-height: 10
-plotAbxHeatmap("directMatch.csv", "Direct Matching", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
-directMatchStats <- calculateStats("directMatch.csv", huttenMat) # 'mat' is from Hutten et al.
-
-```
 \newpage
 
 # Dice Similarity with Morgan Fingerprinting
 
-Morgan fingerprinting[@morgan1965], which assigns numeric identifiers to each atom in an iterative manner. These fingerprints are then compared between two side chains. Dice similarity assigns values to molecular structures, and weights them based on their frequency. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where SAB is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule
+This method utilises Morgan circular fingerprints,[@morgan1965] which iteratively encodes the local atomic environment into a bit vector. These fingerprints are then compared between two side chains using the Dice Coefficient. The Dice coefficient assigns values to molecular structures, and weighs shared features more heaviliy than the total feature set, providing a measure of structural overlap. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where S~AB~ is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule.
 
 ```{r morganDiceChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Dice Similarity "}
 #| fig-width: 10
@@ -299,6 +305,9 @@ morganDiceStats <- calculateStats("morganDice.csv", huttenMat)
 
 # Tanimoto Similarity with Morgan Fingerprinting
 
+A variation of the previous algorithm that instead utilises the Tanimoto Coefficient. Similar in concept to the Dice Coefficient, but with a different weight applied to matching substructures. Previous modelling in this project indicated that the Dice Coefficient strictly dominates the Tanimoto Coefficient, in detecting cross reactivity. Thus analyses using Tanimoto have been excluded from the final analysis.
+\begin{equation} S_{AB} = \frac{C}{A + B - C} \end{equation}
+
 ```{r morganTanimotoChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Tanimoto Similarity "}
 #| fig-width: 10
 #| fig-height: 10
@@ -307,7 +316,9 @@ morganTanimotoStats <- calculateStats("morganTanimoto.csv", huttenMat)
 ```
 
 
-# Pharmacocore with Morgan Fingerprinting
+# Pharmacocore with Dice Similarity
+
+Pharmacocore fingerprinting maps the chemical characteristics of atoms and functional groups, such as hydrogen bond acceptors/donors, aliphatics/aromtatics. The Dice coefficient is then applied to attempt to model how an IgE molecule may 'perceive' a side chain's binding potential regardless of non-functional differences in the molecular structure.[@cereto-massague2015]
 
 ```{r PharmacoDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Pharmacocores"}
 #| fig-width: 10
@@ -316,17 +327,25 @@ plotAbxHeatmap("pharmacoDice.csv", "Pharmacocore Dice Similarity", colorRamp2(c(
 pharmacoDiceStats <- calculateStats("pharmacoDice.csv", huttenMat)
 ```
 
-# MACCS Tanimoto
+# MACCS with Dice Similarity
+<!--Changed from Tanimoto, remember to change variable names.
+-->
 
-```{r MACCSTanimoto, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using MACCS keys with Tanimoto Similarity "}
+This method utilises Molecular Access System(MACCS) keys, a specific type of pre-defined, publicly available structural fragment definition. There are 166 public fragment definitions in the RDKit implementation. A bit string is generated with reference to the presence or absence of certain features, for example, < 3 oxygens, S-S bond, or ring of size 4, etc.[@greglandrum2023:@joseaniceto2023] This method attempts to capture broad structural classes and motifs rather than atom-by-atom circular fingerprints.
+
+```{r MACCSDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using MACCS keys with Dice Similarity "}
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("maccsTanimoto.csv", "MACCS Tanimoto", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+plotAbxHeatmap("maccsTanimoto.csv", "MACCS Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 maccsTanimotoStats <- calculateStats("maccsTanimoto.csv", huttenMat)
 ```
 
 
-# MCS Overlap
+# Maximum Common Substructure (MCS) Overlap
+
+The MCS algorithm identifies the largest substructure shared by two side chains. It performs a graph-matching search to find the maximum number of identical atoms and bonds common to both molecules. A similarity score is calculated as the ratio of the shared atoms to the total atoms in the smaller of the two molecules.[@andrewdalke2012] Calculated as: \begin{equation}
+S_{MCS} = \frac{|MCS(A,B)|}{\min(|A|, |B|)}
+\end{equation}
 
 ```{r MCS, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Maximum Common Substructure"}
 #| fig-width: 10
@@ -336,16 +355,16 @@ mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 ```
 
 ```{python}
-#| label: ensembleMaker
+#| label: ensembleMaker #i.e. combo
 #| echo: false
 #| include: true
 import pandas as pd
 import numpy as np
 
 # Add existing charts
-files = ["directMatch.csv", "morganTanimoto.csv", "morganDice.csv", 
+files = ["directMatch.csv", "morganDice.csv", 
          "pharmacoDice.csv", "maccsTanimoto.csv", "permissiveDirectMatch.csv",]
-# , "mcsOverlap.csv" - Currently removed as sensitivity+specificity lower than MACCS
+# , "mcsOverlap.csv" - Currently removed as sensitivity+specificity lower than MACCS , "morganTanimoto.csv"
 
 # Set index
 dataframes = [pd.read_csv(f, index_col=0) for f in files]
@@ -368,21 +387,25 @@ ensembleDf.to_csv("ensembleMatch.csv")
 
 # All algorithms combined
 
-```{r include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Maximum Common Substructure"}
-#| label: fig-ensemble
+A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms) and MCS overlap which currently lacks specificity. It may be added in later if it can be sufficiently tweaked to be useful.
+
+```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms (MCS currently removed)"}
+#| label: fig-combo
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("ensembleMatch.csv", "all algos combined (MCS currently removed)", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+plotAbxHeatmap("ensembleMatch.csv", "Combined Algorithm Performance", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
 ```
 
 # Hutten et al. without discrepants
 
-```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Hutten with discrepants set to nil for better visual clarity"}
+A re-creation of the Hutten et al[@hutten2025] Matrix with missing values and discrepant matches changed from red and white to green respectively. Currently present purely to aid in visual comparisons.
+
+```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Hutten with discrepants and missing values set to green for better visual comparison"}
 #| label: fig-huttensineDiscrepant
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#A9D08F","#FFFFFF")))
+plotAbxHeatmap("Original.csv", "Hutten et al conformed.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#A9D08F","#A9D08F")))
 ```
 
 
@@ -390,11 +413,20 @@ plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c(
 
 # Performance Table
 
+A table detailing the performance of each algorithm with the final column demonstrating the performance of all algorithms combined. Youden's J is used as an overall performance metric to assist in gauging the cost/benefit of each change to an algorithm. Youden's J is calculated as:
+\begin{equation}
+J = \text{Sensitivity} + \text{Specificity} - 1
+\end{equation}
+
+*I expect there should be a way that I can automate the process of tweaking the thresholds for the similarity coefficients to achieve an optimum Youden's J. Thus far these tweaks have been done manually, then revised by observing the result.*
+
+
 ```{python}
-#| label: tbl-performance-table
+#| label: tbl-performanceTable
 #| echo: false
 #| include: true
-#| tbl-cap: "Compared Performance of Each Algorithm"
+#| tbl-cap: "Compared performance of each algorithm *MCS currently not included in combined result"
+#| tbl-pos: H
 
 from IPython.display import Markdown
 from tabulate import tabulate
@@ -411,56 +443,61 @@ mct = r.maccsTanimotoStats
 ens = r.ensembleStats
 # Table rows
 table = [
-    ["Set Threshold", 'N/A', thresholdMD, thresholdMT,  thresholdPhD, thresholdMCS,  thresholdMAC, 'N/A'],   
-    ["Possible Hits", dm['possibleHits'], md['possibleHits'], pdm['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"],ens['possibleHits']],
-    ["Total Hits",    dm['totalHits'],    md['totalHits'],    pdm['totalHits'],    pd['totalHits'], mcs['totalHits'], mct["totalHits"],ens['totalHits']],
-    ["True +ve",dm['truePositives'],md['truePositives'],pdm['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"],ens['truePositives']],
-    ["False +ve",dm['falsePositives'],md['falsePositives'],pdm['falsePositives'],pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"],ens['falsePositives']],
-    ["False -ve",dm['falseNegatives'],md['falseNegatives'],pdm['falseNegatives'],pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"],ens['falseNegatives']],
-    ["no Data", dm['noDataHit'], md['noDataHit'], pdm['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"],ens['noDataHit']],
-    ["Sensitivity", dm['sensitivity'], md['sensitivity'], pdm['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity'],ens['sensitivity']],
-    ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'],ens['specificity']]
-    ]
+    ["Threshold", 'N/A', thresholdMD, thresholdMT, thresholdPhD, thresholdMCS, thresholdMAC, 'N/A'],   
+    ["Possible Hits", dm['possibleHits'], md['possibleHits'], pdm['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"], ens['possibleHits']],
+    ["Total Hits", dm['totalHits'], md['totalHits'], pdm['totalHits'], pd['totalHits'], mcs['totalHits'], mct["totalHits"], ens['totalHits']],
+    ["True +ve", dm['truePositives'], md['truePositives'], pdm['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"], ens['truePositives']],
+    ["False +ve", dm['falsePositives'], md['falsePositives'], pdm['falsePositives'], pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"], ens['falsePositives']],
+    ["False -ve", dm['falseNegatives'], md['falseNegatives'], pdm['falseNegatives'], pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"], ens['falseNegatives']],
+    ["no Data", dm['noDataHit'], md['noDataHit'], pdm['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"], ens['noDataHit']],
+    ["Sensitivity", dm['sensitivity'], md['sensitivity'], pdm['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity'], ens['sensitivity']],
+    ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], ens['specificity']]
+]
 
+headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Pharmaco Dice", "MCS*", "MACCS Dice", "Combo"]
 
+# Creates the main table first
+tableLatex = tabulate(table, headers=headers, tablefmt="latex_booktabs")
 
-# headers
-headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Pharmaco Dice", "MCS", "MACCS Tanimoto", "Ensemble"]
+# This adds Youden's J row with a midrule separator
+youdenrRow = f"{dm['youdensJ']} & {md['youdensJ']} & {pdm['youdensJ']} & {pd['youdensJ']} & {mcs['youdensJ']} & {mct['youdensJ']} & {ens['youdensJ']}"
+tableLatex = tableLatex.replace(r"\bottomrule", 
+                                   f"\\midrule\nYouden's J & {youdenrRow} \\\\\n\\bottomrule")
 
-# Render the table
-Markdown(tabulate(table, headers=headers, tablefmt="pipe"))
+Markdown(tableLatex)
+
 ```
+
+# Raw Results
+
+A generated list of matches deemed to be false positives or negatives when compared to the Hutten et al. chart for auditing purposes. These can be plugged into PenicillinX[@liamjones2025] for visual inspection of the structures in order to generate hypotheses on why a particular algorithm may have incorrectly hit or missed potential interactions.
 
 ```{python, echo=FALSE, Include=TRUE}
 import pandas as pd
 import numpy as np
 
-# 1. Load the data
-# Use the same paths you used in your previous blocks
+
 ensembleDf = pd.read_csv("ensembleMatch.csv", index_col=0)
 originalDf = pd.read_csv("Original.csv", index_col=0)
 
-# 2. Align the dataframes to ensure drug names match exactly across rows/cols
-# This prevents errors if the drug order differs between files
+# Always align dataframe to prevent the error
 common_idx = originalDf.index.intersection(ensembleDf.index)
 common_cols = originalDf.columns.intersection(ensembleDf.columns)
 
 orig_aligned = originalDf.loc[common_idx, common_cols]
 ens_aligned = ensembleDf.loc[common_idx, common_cols]
 
-# 3. Find where Ensemble=1 and Original=3
-# This creates a boolean mask
+# Find where Ensemble=1 and Original=3 ie no data in original
 noDataMask = (ens_aligned == 1) & (orig_aligned == 3)
-# 4. Extract the names of the pairs
+# Pull the names of the pairs
 rows, cols = np.where(noDataMask)
 noDataPairs = set()
 
 for r, c in zip(rows, cols):
-    # Sort to ensure (DrugA, DrugB) is the same as (DrugB, DrugA)
+    # Prevent BA where AB
     pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
     noDataPairs.add(pair)
 
-# 5. Output the results as text
 print(f"Found {len(noDataPairs)} potential cross-reactions with no clinical data in Hutten et al.:\n")
 for abx1, abx2 in sorted(list(noDataPairs)):
     print(f"- {abx1} and {abx2}")
@@ -471,11 +508,10 @@ rows, cols = np.where(FPDataMask)
 FPDataPairs = set()
 
 for r, c in zip(rows, cols):
-    # Sort to ensure (DrugA, DrugB) is the same as (DrugB, DrugA)
+
     pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
     FPDataPairs.add(pair)
 
-# 5. Output the results as text
 print(f"\nFound {len(FPDataPairs)} potential False positives as compared to Hutten et al.:\n")
 for abx1, abx2 in sorted(list(FPDataPairs)):
     print(f"- {abx1} and {abx2}")
@@ -486,13 +522,13 @@ rows, cols = np.where(FNDataMask)
 FNDataPairs = set()
 
 for r, c in zip(rows, cols):
-    # Sort to ensure (DrugA, DrugB) is the same as (DrugB, DrugA)
+    # Prevent BA where AB
     pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
     FNDataPairs.add(pair)
 
-# 5. Output the results as text
 print(f"\nFound {len(FNDataPairs)} potential False negatives as compared to Hutten et al.:\n")
 for abx1, abx2 in sorted(list(FNDataPairs)):
     print(f"- {abx1} and {abx2}") 
 ```
 
+# References
