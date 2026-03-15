@@ -100,11 +100,11 @@ from rdkit.Chem import rdFingerprintGenerator, MACCSkeys, rdFMCS
 from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
 
 ###### Adjust thresholds here #######################
-thresholdMD = 0.667 # 100% Specificity at 0.667
-thresholdMT = 0.667 # 100% Specificity at 0.667
-thresholdPhD = 0.667 # 100% Specificity at 0.667
-thresholdMAC = 0.70 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity
-thresholdMCS = 0.85 #  # 100% Specificity at TBD
+thresholdMD = 0.55 # 100% Specificity at 0.667 # 0.55 gets optimal J
+thresholdMT = 0.56 # 100% Specificity at 0.667 # 0.56 optimal J
+thresholdPhD = 0.67 # 100% Specificity at 0.667 # 0.67 gets optimal J
+thresholdMAC = 0.68 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity # 0.68 optimal J (0.807)
+thresholdMCS = 0.91 #  # 100% Specificity at TBD # 0.91 optimal J
 ####### -------------------- ########################
 
 # Pull original PenX antibiotic data
@@ -161,7 +161,7 @@ for row in names:
         maccsDf.loc[row] = maccsFpSeries.apply(
             lambda f2: 1 if (f2 and DataStructs.DiceSimilarity(f1, f2) >= thresholdMAC) else 0
         )
-save_matrix(maccsDf, 'maccsTanimoto.csv')
+save_matrix(maccsDf, 'maccsDice.csv')
 
 # Maximum Common Substructure (MCS)
 # use atom counts to check if a significant core is shared
@@ -336,8 +336,8 @@ This method utilises Molecular Access System(MACCS) keys, a specific type of pre
 ```{r MACCSDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using MACCS keys with Dice Similarity "}
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("maccsTanimoto.csv", "MACCS Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
-maccsTanimotoStats <- calculateStats("maccsTanimoto.csv", huttenMat)
+plotAbxHeatmap("maccsDice.csv", "MACCS Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+maccsDiceStats <- calculateStats("maccsDice.csv", huttenMat)
 ```
 
 
@@ -363,7 +363,7 @@ import numpy as np
 
 # Add existing charts
 files = ["directMatch.csv", "morganDice.csv", 
-         "pharmacoDice.csv", "maccsTanimoto.csv", "permissiveDirectMatch.csv",]
+         "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv",]
 # , "mcsOverlap.csv" - Currently removed as sensitivity+specificity lower than MACCS , "morganTanimoto.csv"
 
 # Set index
@@ -439,11 +439,11 @@ md = r.morganDiceStats
 mt = r.morganTanimotoStats
 pd = r.pharmacoDiceStats
 mcs = r.mcsStats
-mct = r.maccsTanimotoStats
+mct = r.maccsDiceStats
 ens = r.ensembleStats
 # Table rows
 table = [
-    ["Threshold", 'N/A', thresholdMD, thresholdMT, thresholdPhD, thresholdMCS, thresholdMAC, 'N/A'],   
+    ["Threshold", 'N/A', thresholdMD, 'N/A', thresholdPhD, thresholdMCS, thresholdMAC, 'N/A'],   
     ["Possible Hits", dm['possibleHits'], md['possibleHits'], pdm['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"], ens['possibleHits']],
     ["Total Hits", dm['totalHits'], md['totalHits'], pdm['totalHits'], pd['totalHits'], mcs['totalHits'], mct["totalHits"], ens['totalHits']],
     ["True +ve", dm['truePositives'], md['truePositives'], pdm['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"], ens['truePositives']],
@@ -472,63 +472,105 @@ Markdown(tableLatex)
 
 A generated list of matches deemed to be false positives or negatives when compared to the Hutten et al. chart for auditing purposes. These can be plugged into PenicillinX[@liamjones2025] for visual inspection of the structures in order to generate hypotheses on why a particular algorithm may have incorrectly hit or missed potential interactions.
 
-```{python, echo=FALSE, Include=TRUE}
+```{python}
+#| label: pair-attribution-analysis
+#| echo: false
+#| output: asis
+
 import pandas as pd
 import numpy as np
 
-
-ensembleDf = pd.read_csv("ensembleMatch.csv", index_col=0)
-originalDf = pd.read_csv("Original.csv", index_col=0)
-
-# Always align dataframe to prevent the error
-common_idx = originalDf.index.intersection(ensembleDf.index)
-common_cols = originalDf.columns.intersection(ensembleDf.columns)
-
-orig_aligned = originalDf.loc[common_idx, common_cols]
-ens_aligned = ensembleDf.loc[common_idx, common_cols]
-
-# Find where Ensemble=1 and Original=3 ie no data in original
-noDataMask = (ens_aligned == 1) & (orig_aligned == 3)
-# Pull the names of the pairs
-rows, cols = np.where(noDataMask)
-noDataPairs = set()
-
-for r, c in zip(rows, cols):
-    # Prevent BA where AB
-    pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
-    noDataPairs.add(pair)
-
-print(f"Found {len(noDataPairs)} potential cross-reactions with no clinical data in Hutten et al.:\n")
-for abx1, abx2 in sorted(list(noDataPairs)):
-    print(f"- {abx1} and {abx2}")
+# 1. Load the matrices
+try:
+    ensembleDf = pd.read_csv("ensembleMatch.csv", index_col=0)
+    originalDf = pd.read_csv("Original.csv", index_col=0)
     
-# The same but for false positives
-FPDataMask = (ens_aligned == 1) & (orig_aligned == 0)
-rows, cols = np.where(FPDataMask)
-FPDataPairs = set()
+    # Define and load individual 'expert' matrices
+    algo_files = {
+        "DM": "directMatch.csv",
+        "PDM": "permissiveDirectMatch.csv",
+        "Morgan": "morganDice.csv",
+        "Pharmaco": "pharmacoDice.csv",
+        "MCS": "mcsOverlap.csv",
+        "MACCS": "maccsDice.csv"
+    }
 
-for r, c in zip(rows, cols):
+    algos = {}
+    for name, file in algo_files.items():
+        try:
+            algos[name] = pd.read_csv(file, index_col=0)
+        except FileNotFoundError:
+            continue
 
-    pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
-    FPDataPairs.add(pair)
+    # 2. Align DataFrames
+    common_idx = originalDf.index.intersection(ensembleDf.index)
+    common_cols = originalDf.columns.intersection(ensembleDf.columns)
+    orig_aligned = originalDf.loc[common_idx, common_cols]
+    ens_aligned = ensembleDf.loc[common_idx, common_cols]
 
-print(f"\nFound {len(FPDataPairs)} potential False positives as compared to Hutten et al.:\n")
-for abx1, abx2 in sorted(list(FPDataPairs)):
-    print(f"- {abx1} and {abx2}")
+    # 3. Define helper inside the same scope
+    def get_contributing_algos(row_name, col_name):
+        """Finds which individual algorithms flagged 1 for this pair."""
+        contributors = []
+        for name, df in algos.items():
+            if row_name in df.index and col_name in df.columns:
+                if df.loc[row_name, col_name] == 1:
+                    contributors.append(name)
+        return ", ".join(contributors)
 
- # The same but for false negatives
-FNDataMask = (ens_aligned == 0) & (orig_aligned == 1)
-rows, cols = np.where(FNDataMask)
-FNDataPairs = set()
+    def run_analysis(mask, title):
+        rows, cols = np.where(mask)
+        pairs = set()
+        pair_details = {}
 
-for r, c in zip(rows, cols):
-    # Prevent BA where AB
-    pair = tuple(sorted([ens_aligned.index[r], ens_aligned.columns[c]]))
-    FNDataPairs.add(pair)
+        for r, c in zip(rows, cols):
+            r_name = ens_aligned.index[r]
+            c_name = ens_aligned.columns[c]
+            pair = tuple(sorted([r_name, c_name]))
+            
+            if pair not in pairs:
+                pairs.add(pair)
+                pair_details[pair] = get_contributing_algos(r_name, c_name)
 
-print(f"\nFound {len(FNDataPairs)} potential False negatives as compared to Hutten et al.:\n")
-for abx1, abx2 in sorted(list(FNDataPairs)):
-    print(f"- {abx1} and {abx2}") 
+        # LaTeX rendering for PDF
+        print(r"\subsubsection{" + f"{len(pairs)} " + title + r"}")
+        print(r"\begin{itemize}")
+        for (abx1, abx2), contributors in sorted(pair_details.items()):
+            contrib_str = f" \\textbf{{[{contributors}]}}" if contributors else " [None]"
+            # Escape & for LaTeX
+            abx_line = f"{abx1} and {abx2}".replace("&", r"\&")
+            print(r"  \item " + f"{abx_line}{contrib_str}")
+        print(r"\end{itemize}")
+        print(r"\hrule")
+
+    # 4. Generate the Sections
+    # Potential Cross-Reactions (No Data)
+    print_mask = (ens_aligned == 1) & (orig_aligned == 3)
+    run_analysis(print_mask, "Potential cross-reactions with no clinical data in Hutten et al.")
+
+    # False Positives
+    fp_mask = (ens_aligned == 1) & (orig_aligned == 0)
+    run_analysis(fp_mask, "Potential false positives as compared to Hutten et al.")
+
+    # False Negatives
+    fn_mask = (ens_aligned == 0) & (orig_aligned == 1)
+    run_analysis(fn_mask, "Potential false negatives as compared to Hutten et al.")
+
+except Exception as e:
+    print(f"Error during analysis: {e}")
 ```
 
 # References
+
+
+
+
+<!-- 
+# Todo
+- optimisation algorithm
+- shiny app
+- continue optimising permissive match
+- read more recent papers
+
+
+-->
