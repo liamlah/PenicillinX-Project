@@ -104,7 +104,7 @@ thresholdMD = 0.55 # 100% Specificity at 0.667 # 0.55 gets optimal J
 thresholdMT = 0.56 # 100% Specificity at 0.667 # 0.56 optimal J
 thresholdPhD = 0.67 # 100% Specificity at 0.667 # 0.67 gets optimal J
 thresholdMAC = 0.68 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity # 0.68 optimal J (0.807)
-thresholdMCS = 0.91 #  # 100% Specificity at TBD # 0.91 optimal J
+thresholdMCS = 0.90 #  # 100% Specificity at TBD # 0.91 optimal J
 ####### -------------------- ########################
 
 # Pull original PenX antibiotic data
@@ -128,8 +128,8 @@ for row in names:
         )
 save_matrix(directMatchDf, 'directMatch.csv')
 
-# Morgan Fingerprints (both Dice & Tanimoto)
-fpGen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+# Morgan Fingerprints (both Dice & Tanimoto) 
+fpGen = rdFingerprintGenerator.GetMorganGenerator(radius=3, fpSize=2048) # Changing radius to 1 lowers youden's J, 3 reduced one false positive.
 fpSeries = molSeries.apply(lambda m: fpGen.GetCountFingerprint(m) if m else None)
 
 for mode, threshold, fileName in [('Dice', thresholdMD, 'morganDice.csv'), ('Tanimoto', thresholdMT, 'morganTanimoto.csv')]:
@@ -175,7 +175,7 @@ for i, rowName in enumerate(names):
         if i >= j: continue # A trick to only check top right and mirror
         m2 = molSeries[colName]
         if m2:
-            res = rdFMCS.FindMCS([m1, m2])
+            res = rdFMCS.FindMCS([m1, m2], completeRingsOnly=False, ringMatchesRingOnly=True) # tweak these parameters and check 
             # Similarity in this case is number of shared atoms / atoms in the smaller molecule
             overlap = res.numAtoms / min(m1.GetNumAtoms(), m2.GetNumAtoms())
             if overlap >= mcsThreshold:
@@ -363,8 +363,8 @@ import numpy as np
 
 # Add existing charts
 files = ["directMatch.csv", "morganDice.csv", 
-         "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv",]
-# , "mcsOverlap.csv" - Currently removed as sensitivity+specificity lower than MACCS , "morganTanimoto.csv"
+         "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv","mcsOverlap.csv"]
+# , "mcsOverlap.csv" - Currently [readded for testing] as sensitivity+specificity lower than MACCS , "morganTanimoto.csv"
 
 # Set index
 dataframes = [pd.read_csv(f, index_col=0) for f in files]
@@ -387,9 +387,9 @@ ensembleDf.to_csv("ensembleMatch.csv")
 
 # All algorithms combined
 
-A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms) and MCS overlap which currently lacks specificity. It may be added in later if it can be sufficiently tweaked to be useful.
+A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms). MCS overlap has been re-added after further tweaking, having been removed in earlier iterations due to poor sensitivity.
 
-```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms (MCS currently removed)"}
+```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms"}
 #| label: fig-combo
 #| fig-width: 10
 #| fig-height: 10
@@ -454,7 +454,7 @@ table = [
     ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], ens['specificity']]
 ]
 
-headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Pharmaco Dice", "MCS*", "MACCS Dice", "Combo"]
+headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Pharmaco Dice", "MCS", "MACCS Dice", "Combo"]
 
 # Creates the main table first
 tableLatex = tabulate(table, headers=headers, tablefmt="latex_booktabs")
