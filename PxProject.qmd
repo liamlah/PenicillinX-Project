@@ -319,7 +319,7 @@ huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3),
 
 plotAbxHeatmapWithNumbers(
   colorCsvPath = "Original.csv", 
-  numbersCsvPath = "OriginalGemFinal.csv", 
+  numbersCsvPath = "OriginalNumbered.csv", 
   chartTitle = "Hutten et al.", 
   colMapping = huttenColors
 )
