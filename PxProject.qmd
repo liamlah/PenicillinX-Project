@@ -32,7 +32,7 @@ library(circlize)
 # 2 = Discrepancy between studies | Brown
 # 3 = No data | White
 
-huttenMat <- as.matrix(read.csv("~/PycharmProjects/PenicillinX-Project/Original.csv", row.names = 1, check.names = FALSE))
+huttenMat <- as.matrix(read.csv("Original.csv", row.names = 1, check.names = FALSE))
 # Function to calculate the stats
 calculateStats <- function(csvPath, originalMat) {
   algoMat <- as.matrix(read.csv(csvPath, row.names = 1, check.names = FALSE))
@@ -318,8 +318,8 @@ huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3),
                            c("#808080", "#A9D08F", "#FF0000", "#CF734F", "#FFFFFF"))
 
 plotAbxHeatmapWithNumbers(
-  colorCsvPath = "Original.csv", 
-  numbersCsvPath = "OriginalNumbered.csv", 
+  colorCsvPath = "Original.csv", # Hutten's Cross reactivity values
+  numbersCsvPath = "OriginalNumbered.csv", # The numbers inside Hutten et al's chart
   chartTitle = "Hutten et al.", 
   colMapping = huttenColors
 )
