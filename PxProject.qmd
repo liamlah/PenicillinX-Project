@@ -24,6 +24,14 @@ library(circlize)
 # Make sure Gu are cited for the above libraries if published
 # [@gu2014]
 # [@gu2022]
+
+# Legend for Original.csv/Hutten et al. | NB: These are unrelated to the numbers displayed in the corresponding plot from the original publication
+#-1 = Same Antibiotic on X/Y | Grey
+# 0 = No cross reaction | Green
+# 1 = Cross reaction | Red
+# 2 = Discrepancy between studies | Brown
+# 3 = No data | White
+
 huttenMat <- as.matrix(read.csv("~/PycharmProjects/PenicillinX-Project/Original.csv", row.names = 1, check.names = FALSE))
 # Function to calculate the stats
 calculateStats <- function(csvPath, originalMat) {
@@ -82,9 +90,54 @@ plotAbxHeatmap <- function(csvPath, chartTitle, colMapping) {
             }
           })
 }
+
+plotAbxHeatmapWithNumbers <- function(colorCsvPath, numbersCsvPath, chartTitle, colMapping) {
+  colorMat <- as.matrix(read.csv(colorCsvPath, row.names = 1, check.names = FALSE))
+  numberMat <- as.matrix(read.csv(numbersCsvPath, row.names = 1, check.names = FALSE))
+  
+  Heatmap(colorMat, 
+          name = "Match", 
+          col = colMapping,
+          column_title = chartTitle,
+          row_names_side = "left", 
+          column_names_side = "top",
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          rect_gp = gpar(col = "black", lwd = 0.4),
+          column_names_rot = 90, 
+          row_names_gp = gpar(fontsize = 8),
+          column_names_gp = gpar(fontsize = 8), 
+          show_heatmap_legend = FALSE,
+          
+          # This overlays the text from the numbers CSV
+          cell_fun = function(j, i, x, y, width, height, fill) {
+            if (numberMat[i, j] != -1) {
+              grid.text(sprintf("%s", numberMat[i, j]), x, y, 
+                        gp = gpar(fontsize = 7, col = "black"))
+            }
+          },
+          
+          layer_fun = function(j, i, x, y, width, height, fill) {
+            nRow = nrow(colorMat)
+            nCol = ncol(colorMat)
+            vIdx = seq(5, nCol - 1, by = 5)
+            if(length(vIdx) > 0) {
+              grid.segments(x0 = unit(vIdx / nCol, "npc"), y0 = unit(0, "npc"),
+                            x1 = unit(vIdx / nCol, "npc"), y1 = unit(1, "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+            hIdx = seq(5, nRow - 1, by = 5)
+            if(length(hIdx) > 0) {
+              grid.segments(x0 = unit(0, "npc"), y0 = unit(1 - (hIdx / nRow), "npc"),
+                            x1 = unit(1, "npc"), y1 = unit(1 - (hIdx / nRow), "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+          })
+}
+
 ```
 
-@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al[@hutten2025] Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al is displayed in a table at the end of the document. *This matrix was reconstructed by hand, and though it was checked for consistency against the original, it can't be guaranteed that it is free from transcription error.*
+@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al[@hutten2025] Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al is displayed in a table at the end of the document. Matrices generated using R library complexheatmap[@gu2022;@gu2014]. *This matrix was reconstructed by hand, and though it was checked for consistency against the original, it can't be guaranteed that it is free from transcription error.*
 
 
 
@@ -104,7 +157,7 @@ thresholdMD = 0.55 # 100% Specificity at 0.667 # 0.55 gets optimal J
 thresholdMT = 0.56 # 100% Specificity at 0.667 # 0.56 optimal J
 thresholdPhD = 0.67 # 100% Specificity at 0.667 # 0.67 gets optimal J
 thresholdMAC = 0.68 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity # 0.68 optimal J (0.807)
-thresholdMCS = 0.90 #  # 100% Specificity at TBD # 0.91 optimal J
+thresholdMCS = 0.89 #  # 100% Specificity at 0.92 # 0.89 optimal J
 ####### -------------------- ########################
 
 # Pull original PenX antibiotic data
@@ -260,7 +313,19 @@ save_matrix(permissiveMatchDf, 'permissiveDirectMatch.csv')
 #| label: fig-huttenChart
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#CF734F","#FFFFFF")))
+
+huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3), 
+                           c("#808080", "#A9D08F", "#FF0000", "#CF734F", "#FFFFFF"))
+
+plotAbxHeatmapWithNumbers(
+  colorCsvPath = "Original.csv", 
+  numbersCsvPath = "OriginalGemFinal.csv", 
+  chartTitle = "Hutten et al.", 
+  colMapping = huttenColors
+)
+
+
+#plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#CF734F","#FFFFFF")))
 ```
 \newpage
 
@@ -364,7 +429,7 @@ import numpy as np
 # Add existing charts
 files = ["directMatch.csv", "morganDice.csv", 
          "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv","mcsOverlap.csv"]
-# , "mcsOverlap.csv" - Currently [readded for testing] as sensitivity+specificity lower than MACCS , "morganTanimoto.csv"
+# "mcsOverlap.csv" - Currently [readded for testing] as sensitivity+specificity lower than MACCS , "morganTanimoto.csv removed"
 
 # Set index
 dataframes = [pd.read_csv(f, index_col=0) for f in files]
@@ -409,6 +474,9 @@ plotAbxHeatmap("Original.csv", "Hutten et al conformed.", colorRamp2(c(-1, 0, 1,
 ```
 
 
+
+
+
 \newpage
 
 # Performance Table
@@ -425,7 +493,7 @@ J = \text{Sensitivity} + \text{Specificity} - 1
 #| label: tbl-performanceTable
 #| echo: false
 #| include: true
-#| tbl-cap: "Compared performance of each algorithm *MCS currently not included in combined result"
+#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result"
 #| tbl-pos: H
 
 from IPython.display import Markdown
@@ -454,7 +522,7 @@ table = [
     ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], ens['specificity']]
 ]
 
-headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Pharmaco Dice", "MCS", "MACCS Dice", "Combo"]
+headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Ph-Dice", "MCS", "MACCS Dice", "Combo"]
 
 # Creates the main table first
 tableLatex = tabulate(table, headers=headers, tablefmt="latex_booktabs")
@@ -480,12 +548,12 @@ A generated list of matches deemed to be false positives or negatives when compa
 import pandas as pd
 import numpy as np
 
-# 1. Load the matrices
+# Loads the matrices
 try:
     ensembleDf = pd.read_csv("ensembleMatch.csv", index_col=0)
     originalDf = pd.read_csv("Original.csv", index_col=0)
     
-    # Define and load individual 'expert' matrices
+    # Define and load individual matrices
     algo_files = {
         "DM": "directMatch.csv",
         "PDM": "permissiveDirectMatch.csv",
@@ -502,13 +570,13 @@ try:
         except FileNotFoundError:
             continue
 
-    # 2. Align DataFrames
+    # Align DataFrames
     common_idx = originalDf.index.intersection(ensembleDf.index)
     common_cols = originalDf.columns.intersection(ensembleDf.columns)
     orig_aligned = originalDf.loc[common_idx, common_cols]
     ens_aligned = ensembleDf.loc[common_idx, common_cols]
 
-    # 3. Define helper inside the same scope
+    # Define helper inside the same scope
     def get_contributing_algos(row_name, col_name):
         """Finds which individual algorithms flagged 1 for this pair."""
         contributors = []
@@ -543,18 +611,26 @@ try:
         print(r"\end{itemize}")
         print(r"\hrule")
 
-    # 4. Generate the Sections
+    # Generate the Sections
     # Potential Cross-Reactions (No Data)
-    print_mask = (ens_aligned == 1) & (orig_aligned == 3)
-    run_analysis(print_mask, "Potential cross-reactions with no clinical data in Hutten et al.")
-
+    nd_mask = (ens_aligned == 1) & (orig_aligned == 3)
+    run_analysis(nd_mask, "Predicted cross-reactions with no clinical data in Hutten et al.")
     # False Positives
     fp_mask = (ens_aligned == 1) & (orig_aligned == 0)
     run_analysis(fp_mask, "Potential false positives as compared to Hutten et al.")
 
+    # Discrepant positives
+    dp_mask = (ens_aligned == 1) & (orig_aligned == 2)
+    run_analysis(dp_mask, "Predicted cross-reactions where there is discrepancy according to Hutten et al." )
+
+    # Discrepant Negatives
+    dp_mask = (ens_aligned == 0) & (orig_aligned == 2)
+    run_analysis(dp_mask, "Negative predictions where there is discrepancy according to Hutten et al." )
+
     # False Negatives
     fn_mask = (ens_aligned == 0) & (orig_aligned == 1)
     run_analysis(fn_mask, "Potential false negatives as compared to Hutten et al.")
+    
 
 except Exception as e:
     print(f"Error during analysis: {e}")
@@ -567,6 +643,7 @@ except Exception as e:
 
 <!-- 
 # Todo
+- Standardise legacy Rmarkdown formatting to Quarto
 - optimisation algorithm
 - shiny app
 - continue optimising permissive match
