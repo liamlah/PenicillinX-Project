@@ -151,16 +151,38 @@ import numpy as np
 from rdkit import Chem, DataStructs
 from rdkit.Chem import rdFingerprintGenerator, MACCSkeys, rdFMCS
 from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
+from rdkit.Chem import rdFingerprintGenerator
 
 ###### Adjust thresholds here #######################
-thresholdMD = 0.55 # 100% Specificity at 0.667 # 0.55 gets optimal J
+thresholdMD = 0.4867 # 100% Specificity at 0.667 # 0.55 gets optimal J
 thresholdMT = 0.56 # 100% Specificity at 0.667 # 0.56 optimal J
 thresholdPhD = 0.67 # 100% Specificity at 0.667 # 0.67 gets optimal J
-thresholdMAC = 0.68 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity # 0.68 optimal J (0.807)
-thresholdMCS = 0.89 #  # 100% Specificity at 0.92 # 0.89 optimal J
+thresholdMAC = 0.7041 # 99.97% Specificity at 0.667 with Tani, Dice at 0.78 with greater sensitivity # 0.68 optimal J (0.807)
+thresholdMCS = 0.8914 #  # 100% Specificity at 0.92 # 0.89 optimal J
+thresholdAPD = 0.4709 # >.53 gets worse .47 optimal J with Distance 7
 ####### -------------------- ########################
 
+
+# Alternative thresholds
+##Ultimate random. Sens .882 spec .976. J .858, ND 20
+#thresholdMD = 0.542 
+#thresholdMT = 0.56  
+#thresholdPhD = 0.829 
+#thresholdMAC = 0.743
+#thresholdMCS = 0.898
+#thresholdAPD = 0.505
+
+##Penultimate random. Sens .882 spec .974. J .857. ND 22
+#thresholdMD = 0.523 
+#thresholdMT = 0.56  
+#thresholdPhD = 0.801 
+#thresholdMAC = 0.75
+#thresholdMCS = 0.893
+#thresholdAPD = 0.484
+
+
 # Pull original PenX antibiotic data
+
 abxData = pd.read_csv("antibiotics_data.csv")
 names = abxData["Antibiotic"].tolist()
 molSeries = abxData.set_index("Antibiotic")["SMILESR1"].apply(
@@ -236,6 +258,23 @@ for i, rowName in enumerate(names):
                 mcsDf.iloc[j, i] = 1
 
 save_matrix(mcsDf, 'mcsOverlap.csv')
+
+# Atom pairs using Dice Similarity
+apGen = rdFingerprintGenerator.GetAtomPairGenerator(minDistance=1, maxDistance=7) # D7 appears optimal
+# Make the fingerprint
+apSeries = molSeries.apply(lambda m: apGen.GetCountFingerprint(m) if m else None)
+
+# Checking the similarity
+apDf = pd.DataFrame(0, index=names, columns=names)
+for row in names:
+    f1 = apSeries[row]
+    if f1:
+        # Using Dice Similarity to compare the count fingerprints
+        apDf.loc[row] = apSeries.apply(
+            lambda f2: 1 if (f2 and DataStructs.DiceSimilarity(f1, f2) >= thresholdAPD) else 0
+        )
+
+save_matrix(apDf, 'atomPairsDice.csv')
 
 ```
 
@@ -419,6 +458,17 @@ plotAbxHeatmap("mcsOverlap.csv", "Maximum Common Substructure Overlap", colorRam
 mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 ```
 
+# Atom Pairs with Dice Similarity
+
+Add description later
+
+```{r atomPairsChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Atom Pairs with Dice Similarity"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("atomPairsDice.csv", "Atom Pairs Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+atomPairsStats <- calculateStats("atomPairsDice.csv", huttenMat)
+```
+
 ```{python}
 #| label: ensembleMaker #i.e. combo
 #| echo: false
@@ -428,7 +478,7 @@ import numpy as np
 
 # Add existing charts
 files = ["directMatch.csv", "morganDice.csv", 
-         "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv","mcsOverlap.csv"]
+         "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv", "atomPairsDice.csv","mcsOverlap.csv"]
 # "mcsOverlap.csv" - Currently [readded for testing] as sensitivity+specificity lower than MACCS , "morganTanimoto.csv removed"
 
 # Set index
@@ -449,6 +499,9 @@ ensembleDf.to_csv("ensembleMatch.csv")
 
 
 ```
+
+
+
 
 # All algorithms combined
 
@@ -493,7 +546,7 @@ J = \text{Sensitivity} + \text{Specificity} - 1
 #| label: tbl-performanceTable
 #| echo: false
 #| include: true
-#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result"
+#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM=Direct Matching, MD=Morgan Dice, PDM=Permissive Direct Matching, PD=Pharmacocore-Dice, MCS=Maximum Common Substructure, APD=Atom Pairs-Dice."
 #| tbl-pos: H
 
 from IPython.display import Markdown
@@ -508,33 +561,37 @@ mt = r.morganTanimotoStats
 pd = r.pharmacoDiceStats
 mcs = r.mcsStats
 mct = r.maccsDiceStats
+apd = r.atomPairsStats
 ens = r.ensembleStats
 # Table rows
 table = [
-    ["Threshold", 'N/A', thresholdMD, 'N/A', thresholdPhD, thresholdMCS, thresholdMAC, 'N/A'],   
-    ["Possible Hits", dm['possibleHits'], md['possibleHits'], pdm['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"], ens['possibleHits']],
-    ["Total Hits", dm['totalHits'], md['totalHits'], pdm['totalHits'], pd['totalHits'], mcs['totalHits'], mct["totalHits"], ens['totalHits']],
-    ["True +ve", dm['truePositives'], md['truePositives'], pdm['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"], ens['truePositives']],
-    ["False +ve", dm['falsePositives'], md['falsePositives'], pdm['falsePositives'], pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"], ens['falsePositives']],
-    ["False -ve", dm['falseNegatives'], md['falseNegatives'], pdm['falseNegatives'], pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"], ens['falseNegatives']],
-    ["no Data", dm['noDataHit'], md['noDataHit'], pdm['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"], ens['noDataHit']],
-    ["Sensitivity", dm['sensitivity'], md['sensitivity'], pdm['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity'], ens['sensitivity']],
-    ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], ens['specificity']]
+    ["Threshold", 'N/A', thresholdMD, 'N/A', thresholdPhD, thresholdMCS, thresholdMAC, thresholdAPD, 'N/A'],   
+    ["Possible Hits", dm['possibleHits'], md['possibleHits'], pdm['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"], apd['possibleHits'], ens['possibleHits']],
+    ["Total Hits", dm['totalHits'], md['totalHits'], pdm['totalHits'], pd['totalHits'], mcs['totalHits'], mct["totalHits"], apd['totalHits'], ens['totalHits']],
+    ["True +ve", dm['truePositives'], md['truePositives'], pdm['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"], apd["truePositives"], ens['truePositives']],
+    ["False +ve", dm['falsePositives'], md['falsePositives'], pdm['falsePositives'], pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"], apd["falsePositives"], ens['falsePositives']],
+    ["False -ve", dm['falseNegatives'], md['falseNegatives'], pdm['falseNegatives'], pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"], apd["falseNegatives"], ens['falseNegatives']],
+    ["no Data", dm['noDataHit'], md['noDataHit'], pdm['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"], apd["noDataHit"], ens['noDataHit']],
+    ["Sensitivity", dm['sensitivity'], md['sensitivity'], pdm['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity'], apd['sensitivity'], ens['sensitivity']],
+    ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], apd['specificity'], ens['specificity']]
 ]
 
-headers = ["Metric", "Direct Match", "Morgan Dice", "PDM", "Ph-Dice", "MCS", "MACCS Dice", "Combo"]
+headers = ["Metric", "DM", "MD", "PDM", "Ph-Dice", "MCS", "MACCS Dice","APD","Combo"]
 
 # Creates the main table first
 tableLatex = tabulate(table, headers=headers, tablefmt="latex_booktabs")
 
 # This adds Youden's J row with a midrule separator
-youdenrRow = f"{dm['youdensJ']} & {md['youdensJ']} & {pdm['youdensJ']} & {pd['youdensJ']} & {mcs['youdensJ']} & {mct['youdensJ']} & {ens['youdensJ']}"
+youdenrRow = f"{dm['youdensJ']} & {md['youdensJ']} & {pdm['youdensJ']} & {pd['youdensJ']} & {mcs['youdensJ']} & {mct['youdensJ']}& {apd['youdensJ']} & {ens['youdensJ']}"
 tableLatex = tableLatex.replace(r"\bottomrule", 
                                    f"\\midrule\nYouden's J & {youdenrRow} \\\\\n\\bottomrule")
 
 Markdown(tableLatex)
 
 ```
+
+
+
 
 # Raw Results
 
@@ -560,7 +617,8 @@ try:
         "Morgan": "morganDice.csv",
         "Pharmaco": "pharmacoDice.csv",
         "MCS": "mcsOverlap.csv",
-        "MACCS": "maccsDice.csv"
+        "MACCS": "maccsDice.csv",
+        "AP":"atomPairsDice.csv"
     }
 
     algos = {}
@@ -632,11 +690,346 @@ try:
     run_analysis(fn_mask, "Potential false negatives as compared to Hutten et al.")
     
 
+
+
 except Exception as e:
     print(f"Error during analysis: {e}")
+    
+# True Positives Analysis
+tp_mask = (ens_aligned == 1) & (orig_aligned == 1)
+
+def run_tp_analysis(mask, title):
+    rows, cols = np.where(mask)
+    pairs = set()
+    pair_details = {}
+
+    for r, c in zip(rows, cols):
+        r_name = ens_aligned.index[r]
+        c_name = ens_aligned.columns[c]
+        pair = tuple(sorted([r_name, c_name]))
+        
+        if pair not in pairs:
+            # We want to see which algos contributed
+            contributors = get_contributing_algos(r_name, c_name)
+            # Focus on "Unique" hits or those including the new AP module
+            pairs.add(pair)
+            pair_details[pair] = contributors
+
+    print(r"\subsubsection{" + f"{len(pairs)} " + title + r"}")
+    print(r"\begin{itemize}")
+    for (abx1, abx2), contributors in sorted(pair_details.items()):
+        # Highlight pairs where AP was a factor
+        is_ap_hit = "AP" in contributors
+        style = r"\textbf" if is_ap_hit else r"\textit"
+        
+        contrib_str = f" {style}{{{'[' + contributors + ']'}}}"
+        abx_line = f"{abx1} and {abx2}".replace("&", r"\&")
+        print(r"  \item " + f"{abx_line}{contrib_str}")
+    print(r"\end{itemize}")
+    print(r"\hrule")
+
+# Execute
+run_tp_analysis(tp_mask, "True Positives in agreement with Hutten et al.")
+    
 ```
 
+
+
+
+```{python}
+#| label: fig-combined-pr-curve
+#| echo: false
+#| output: asis
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from rdkit import Chem, DataStructs
+from rdkit.Chem import rdFingerprintGenerator, MACCSkeys, rdFMCS
+from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
+from sklearn.metrics import precision_recall_curve
+
+# Load Data
+abxData = pd.read_csv("antibiotics_data.csv")
+truth_df = pd.read_csv("Original.csv", index_col=0)
+names = abxData["Antibiotic"].tolist()
+molSeries = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+    lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+)
+
+# Setup Generators
+fpGen = rdFingerprintGenerator.GetMorganGenerator(radius=3, fpSize=2048)
+apGen = rdFingerprintGenerator.GetAtomPairGenerator(minDistance=1, maxDistance=7) 
+
+# Calculate Raw Similarity Scores
+y_true = []
+scores = {
+    "Morgan Dice": [],
+    "Pharmaco Dice": [],
+    "MACCS Dice": [],
+    "Atom Pairs Dice": [],
+    "MCS Overlap": []
+}
+
+# Pre-generate fingerprints for speed
+morgan_fps = molSeries.apply(lambda m: fpGen.GetCountFingerprint(m) if m else None)
+pharm_fps = molSeries.apply(lambda m: Generate.Gen2DFingerprint(m, Gobbi_Pharm2D.factory) if m else None)
+maccs_fps = molSeries.apply(lambda m: MACCSkeys.GenMACCSKeys(m) if m else None)
+ap_fps = molSeries.apply(lambda m: apGen.GetCountFingerprint(m) if m else None)
+
+# Align with truth_df 
+for i, name1 in enumerate(names):
+    for j, name2 in enumerate(names):
+        if i >= j: continue 
+        
+        truth = truth_df.loc[name1, name2]
+        if truth not in [0, 1]: continue 
+        
+        y_true.append(truth)
+        m1, m2 = molSeries[name1], molSeries[name2]
+        
+        # Calculate scores
+        scores["Morgan Dice"].append(DataStructs.DiceSimilarity(morgan_fps[name1], morgan_fps[name2]) if (morgan_fps[name1] and morgan_fps[name2]) else 0)
+        scores["Pharmaco Dice"].append(DataStructs.DiceSimilarity(pharm_fps[name1], pharm_fps[name2]) if (pharm_fps[name1] and pharm_fps[name2]) else 0)
+        scores["MACCS Dice"].append(DataStructs.DiceSimilarity(maccs_fps[name1], maccs_fps[name2]) if (maccs_fps[name1] and maccs_fps[name2]) else 0)
+        scores["Atom Pairs Dice"].append(DataStructs.DiceSimilarity(ap_fps[name1], ap_fps[name2]) if (ap_fps[name1] and ap_fps[name2]) else 0)
+        
+        # MCS Overlap
+        if m1 and m2:
+            res = rdFMCS.FindMCS([m1, m2], completeRingsOnly=False, ringMatchesRingOnly=True)
+            overlap = res.numAtoms / min(m1.GetNumAtoms(), m2.GetNumAtoms())
+            scores["MCS Overlap"].append(overlap)
+        else:
+            scores["MCS Overlap"].append(0)
+
+# Plotting
+plt.figure(figsize=(8, 6))
+current_thresholds = {
+    "Morgan Dice": thresholdMD,
+    "Pharmaco Dice": thresholdPhD,
+    "MACCS Dice": thresholdMAC,
+    "Atom Pairs Dice": thresholdAPD,
+    "MCS Overlap": thresholdMCS
+}
+
+for label, y_scores in scores.items():
+    precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
+    plt.plot(recall, precision, label=label, lw=2)
+    
+    # Mark the current manual threshold on the curve
+    idx = np.argmin(np.abs(thresholds - current_thresholds[label]))
+    plt.scatter(recall[idx], precision[idx], s=50, edgecolor='black', zorder=5)
+
+plt.xlabel('Recall (Sensitivity)')
+plt.ylabel('Precision (1 - False Discovery Rate)')
+plt.title('Combined Precision-Recall Curves for Cross-Reactivity Algorithms')
+plt.xlim(0.2, 1.0) # Zoomed x-axis
+plt.ylim(0.3, 1.05)
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+
+# Save and print LaTeX
+plt.savefig("combined_pr_curve.png", dpi=300)
+plt.close() # CRITICAL: Prevents double rendering in Quarto
+
+print(r"\begin{center}")
+print(r"\includegraphics[width=0.9\textwidth]{combined_pr_curve.png}")
+print(r"\end{center}")
+```
+
+
+<!--{python}
+#| label: global-optimizer-differential evolution
+#| echo: false
+#| output: false
+
+import numpy as np
+from scipy.optimize import differential_evolution
+import time
+
+# Prepare data 
+labels = list(scores.keys())
+score_matrix = np.array([scores[l] for l in labels]).T
+y_true_arr = np.array(y_true)
+
+# Static PDM Baseline 
+# Ensure pdm_preds_arr is available in your workspace
+pos_count = np.sum(y_true_arr == 1)
+neg_count = np.sum(y_true_arr == 0)
+
+# Define the Objective Function for DE
+def ensemble_objective(trial_thresholds):
+    # The optimiser tries to min the return value
+    # Trial_thresholds order: Morgan, Pharmaco, MACCS, AP, MCS
+    thresh_vec = np.array(trial_thresholds)
+    
+    # Ensemble logic: PDM (static) OR thresholded scores
+    preds = pdm_preds_arr | np.any(score_matrix >= thresh_vec, axis=1)
+    
+    tp = np.sum(preds & (y_true_arr == 1))
+    fp = np.sum(preds & (y_true_arr == 0))
+    
+    sens = tp / pos_count
+    spec = (neg_count - fp) / neg_count
+    
+    # to max J we min (1 - J)
+    j_index = sens + spec - 1
+    
+    # anchor specificity with a penalty
+    penalty = 0
+    if spec < 0.98:
+        penalty = (0.98 - spec) * 10 
+        
+    return (1 - j_index) + penalty
+
+# Configure and Run the Optimizer
+# Bounds: Morgan, Pharmaco, MACCS, AtomPairs, MCS
+bounds = [(0.40, 0.80), (0.50, 0.95), (0.50, 0.95), (0.40, 0.80), (0.65, 0.98)]
+
+start_time = time.time()
+result = differential_evolution(
+    ensemble_objective, 
+    bounds, 
+    strategy='best1bin', 
+    popsize=20,     # Size of population
+    mutation=(0.5, 1), 
+    recombination=0.7,
+    tol=0.01        # Finish when improvement is minimal
+)
+
+#Extract and Assign Winning Thresholds
+win_t_vals = result.x
+win_j = 1 - result.fun # Approximate if penalty is 0
+
+# Final check of stats for the winner
+preds = pdm_preds_arr | np.any(score_matrix >= win_t_vals, axis=1)
+tp = np.sum(preds & (y_true_arr == 1))
+fp = np.sum(preds & (y_true_arr == 0))
+win_sens = tp / pos_count
+win_spec = (neg_count - fp) / neg_count
+win_j_final = win_sens + win_spec - 1
+
+# Update the global variables for downstream blocks - deprecated remove
+thresholdMD = win_t_vals[0]
+thresholdPhD = win_t_vals[1]
+thresholdMAC = win_t_vals[2]
+thresholdAPD = win_t_vals[3]
+thresholdMCS = win_t_vals[4]
+
+# Output Summary
+print(r"\begin{tcolorbox}[colback=green!5,colframe=green!75,title=Differential Evolution Global Optimization]")
+print(fr"Optimizer converged in {time.time() - start_time:.1f} seconds.\\")
+print(r"\begin{itemize}")
+print(fr"  \item \textbf{{Optimized Ensemble J:}} {win_j_final:.4f}")
+print(fr"  \item \textbf{{Sensitivity:}} {win_sens:.4f} | \textbf{{Specificity:}} {win_spec:.4f}")
+print(r"\end{itemize}")
+print(r"\hrulefill\\")
+print(r"\textbf{Winning Thresholds:}")
+print(r"\begin{description}")
+for i, label in enumerate(labels):
+    print(fr"  \item[{label}:] {win_t_vals[i]:.4f}")
+print(r"\end{description}")
+print(r"\end{tcolorbox}")
+```
+-->
+
+
+
+<!-- Optimising algorithm, to switch on, add ``` in front of the bracketed python and remove this comment syntax. takes about 4 minutes to run 20 million iterations. Only run the block, do not try to render with quarto.
+{python}
+#| label: global-ensemble-optimizer
+#| echo: false
+#| output: asis
+
+import numpy as np
+import time
+
+# Define the Global Optimizer Function
+def run_global_search_vectorized(y_true, scores_dict, iterations=20000000):
+    best_j = -1
+    best_thresholds = {}
+    
+    labels = list(scores_dict.keys())
+    # score_matrix shape: (n_pairs, 5)
+    score_matrix = np.array([scores_dict[l] for l in labels]).T
+    y_true_arr = np.array(y_true)
+    
+    # Pre-calculate constants for sensitivity/specificity to avoid repeated sums
+    pos_count = np.sum(y_true_arr == 1)
+    neg_count = np.sum(y_true_arr == 0)
+
+    # Pre-generate ALL thresholds: 20M x 5 floats ~= 800MB RAM
+    # Define bounds: Morgan, Pharmaco, MACCS, AtomPairs, MCS
+    lows =  np.array([0.40, 0.50, 0.50, 0.40, 0.65])
+    highs = np.array([0.75, 0.90, 0.90, 0.75, 0.95])
+    all_thresholds = np.random.uniform(lows, highs, size=(iterations, len(labels)))
+
+    print(f"Starting 20M iterations...")
+    start_time = time.time()
+
+    for i in range(iterations):
+        thresh_vec = all_thresholds[i]
+        
+        # Vectorized comparison across the 5 algorithms for this specific drug pair set
+        # 'preds' is a boolean array: True if ANY algo matches
+        preds = np.any(score_matrix >= thresh_vec, axis=1)
+        
+        # Calculate TP and FP using fast logical masking
+        tp = np.sum(preds & (y_true_arr == 1))
+        fp = np.sum(preds & (y_true_arr == 0))
+        
+        sens = tp / pos_count
+        spec = (neg_count - fp) / neg_count
+        current_j = sens + spec - 1
+        
+        # Clinical constraint + High Score check
+        if spec >= 0.96 and current_j > best_j:
+            best_j = current_j
+            best_thresholds = dict(zip(labels, thresh_vec))
+            best_stats = (sens, spec)
+            
+        # Optional: Progress heartbeat every 5 million
+        if (i + 1) % 5000000 == 0:
+            elapsed = time.time() - start_time
+            print(f"--- {i+1} iterations reached ({elapsed:.1f}s) ---")
+
+    return best_thresholds, best_j, best_stats
+
+#. Run the Optimization
+win_t, win_j, win_stats = run_global_search_vectorized(y_true, scores)
+
+# Store results for the rest of the document
+thresholdMD = win_t["Morgan Dice"]
+thresholdPhD = win_t["Pharmaco Dice"]
+thresholdMAC = win_t["MACCS Dice"]
+thresholdAPD = win_t["Atom Pairs Dice"]
+thresholdMCS = win_t["MCS Overlap"]
+
+# Output a summary
+print(r"\begin{tcolorbox}[colback=blue!5,colframe=blue!75,title=Global Optimizer Results (20M Iterations)]")
+print(fr"Completed in {time.time() - start_time:.1f} seconds.\\")
+print(r"\begin{itemize}")
+print(fr"  \item \textbf{{Ensemble Youden's J:}} {win_j:.4f}")
+print(fr"  \item \textbf{{Sensitivity:}} {win_stats[0]:.4f} | \textbf{{Specificity:}} {win_stats[1]:.4f}")
+print(r"\end{itemize}")
+print(r"\hrulefill\\")
+print(r"\textbf{Winning Thresholds:}")
+print(r"\begin{description}")
+for algo, val in win_t.items():
+    print(fr"  \item[{algo}:] {val:.4f}")
+print(r"\end{description}")
+print(r"\end{tcolorbox}")
+```
+
+-->
+
+
+
+
+
 # References
+
 
 
 
@@ -645,7 +1038,6 @@ except Exception as e:
 # Todo
 - Standardise legacy Rmarkdown formatting to Quarto
 - optimisation algorithm
-- shiny app
 - continue optimising permissive match
 - read more recent papers
 
