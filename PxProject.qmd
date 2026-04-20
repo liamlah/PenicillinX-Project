@@ -206,7 +206,7 @@ save_matrix(directMatchDf, 'directMatch.csv')
 # Morgan Fingerprints (both Dice & Tanimoto) 
 fpGen = rdFingerprintGenerator.GetMorganGenerator(radius=3, fpSize=2048) # Changing radius to 1 lowers youden's J, 3 reduced one false positive.
 fpSeries = molSeries.apply(lambda m: fpGen.GetCountFingerprint(m) if m else None)
-
+# No longer using Tanimoto, clean this up at some point
 for mode, threshold, fileName in [('Dice', thresholdMD, 'morganDice.csv'), ('Tanimoto', thresholdMT, 'morganTanimoto.csv')]:
     df = pd.DataFrame(0, index=names, columns=names)
     simFunc = DataStructs.DiceSimilarity if mode == 'Dice' else DataStructs.TanimotoSimilarity
@@ -460,7 +460,7 @@ mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 
 # Atom Pairs with Dice Similarity
 
-Add description later
+Add description later. Original paper[@carhart1985] Picard et al usage[@picard2019]
 
 ```{r atomPairsChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Atom Pairs with Dice Similarity"}
 #| fig-width: 10
@@ -500,12 +500,45 @@ ensembleDf.to_csv("ensembleMatch.csv")
 
 ```
 
+```{python}
+#| label: ensembleMaker
+#| echo: false
+#| include: true
+import pandas as pd
+import numpy as np
 
+# List of all algorithm CSVs
+files = ["directMatch.csv", "morganDice.csv", "pharmacoDice.csv", 
+         "maccsDice.csv", "permissiveDirectMatch.csv", 
+         "atomPairsDice.csv", "mcsOverlap.csv"]
+
+# Load all dataframes
+dataframes = [pd.read_csv(f, index_col=0) for f in files]
+
+# 1. Create the Binary Mask (Any match = 1) for the background colors
+ensembleMask = (dataframes[0] == 1)
+for df in dataframes[1:]:
+    ensembleMask |= (df == 1)
+ensembleDf = ensembleMask.astype(int)
+np.fill_diagonal(ensembleDf.values, -1)
+ensembleDf.to_csv("ensembleMatch.csv")
+
+# 2. Create the Count Matrix (Sum of hits) for the labels
+# We convert each DF to 0/1 and sum them up
+ensembleCountDf = pd.DataFrame(0, index=ensembleDf.index, columns=ensembleDf.columns)
+for df in dataframes:
+    # Ensure we only count actual '1's (ignoring -1s)
+    ensembleCountDf += (df == 1).astype(int)
+
+# Set diagonal to -1 so the heatmap function knows to ignore/grey them out
+np.fill_diagonal(ensembleCountDf.values, -1)
+ensembleCountDf.to_csv("ensembleCounts.csv")
+``
 
 
 # All algorithms combined
 
-A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms). MCS overlap has been re-added after further tweaking, having been removed in earlier iterations due to poor sensitivity.
+A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms). MCS overlap has been re-added after further tweaking, having been removed in earlier iterations due to poor sensitivity. Atom-Pairs algorithm has been added 
 
 ```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms"}
 #| label: fig-combo
@@ -546,7 +579,7 @@ J = \text{Sensitivity} + \text{Specificity} - 1
 #| label: tbl-performanceTable
 #| echo: false
 #| include: true
-#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM=Direct Matching, MD=Morgan Dice, PDM=Permissive Direct Matching, PD=Pharmacocore-Dice, MCS=Maximum Common Substructure, APD=Atom Pairs-Dice."
+#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, PD:Pharmacocore-Dice, MCS:Maximum Common Substructure, APD:Atom Pairs-Dice."
 #| tbl-pos: H
 
 from IPython.display import Markdown
@@ -814,17 +847,29 @@ current_thresholds = {
 
 for label, y_scores in scores.items():
     precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
-    plt.plot(recall, precision, label=label, lw=2)
+    line, = plt.plot(recall, precision, label=label, lw=2)
+    color = line.get_color()
     
     # Mark the current manual threshold on the curve
     idx = np.argmin(np.abs(thresholds - current_thresholds[label]))
-    plt.scatter(recall[idx], precision[idx], s=50, edgecolor='black', zorder=5)
+    x_point = recall[idx]
+    y_point = precision[idx]
+    plt.scatter(recall[idx], precision[idx], s=60, color=color, edgecolor='black', zorder=5)
+
+# Labelling of dots
+    plt.annotate(label, 
+                 (x_point, y_point), 
+                 textcoords="offset points", 
+                 xytext=(5, 5), 
+                 fontsize=9,
+                 fontweight='bold',
+                 color=color)
 
 plt.xlabel('Recall (Sensitivity)')
 plt.ylabel('Precision (1 - False Discovery Rate)')
-plt.title('Combined Precision-Recall Curves for Cross-Reactivity Algorithms')
-plt.xlim(0.2, 1.0) # Zoomed x-axis
-plt.ylim(0.3, 1.05)
+plt.title('Combined Precision-Recall Curves for Thresholded Cross-Reactivity Algorithms')
+plt.xlim(0.2, 1.0);
+plt.ylim(0.3, 1.05);
 plt.legend()
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -1025,8 +1070,7 @@ print(r"\end{tcolorbox}")
 -->
 
 
-
-
+\newpage 
 
 # References
 
