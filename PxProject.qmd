@@ -1,5 +1,6 @@
 ---
 title: "PenicillinX-Project"
+subtitle: "How accurately can we predict beta-lactam cross reactivity based on molecular descriptors?"
 format:
   pdf:
     cite-method: citeproc
@@ -14,6 +15,12 @@ header-includes:
 ---
 
 \newpage
+
+<!-- # Introduction
+
+[@grisoni2018]
+
+-->
 
 # Hutten et al.
 
@@ -135,9 +142,56 @@ plotAbxHeatmapWithNumbers <- function(colorCsvPath, numbersCsvPath, chartTitle, 
           })
 }
 
+plotSuperimposedHeatmap <- function(baseCsvPath, overlayCsvPath, chartTitle, baseColMapping) {
+  # Load matrices
+  baseMat <- as.matrix(read.csv(baseCsvPath, row.names = 1, check.names = FALSE))
+  overlayMat <- as.matrix(read.csv(overlayCsvPath, row.names = 1, check.names = FALSE))
+  
+  # Ensure indices are aligned perfectly
+  overlayMat <- overlayMat[rownames(baseMat), colnames(baseMat)]
+
+  Heatmap(baseMat, 
+          name = "Hutten Base", 
+          col = baseColMapping,
+          column_title = chartTitle,
+          row_names_side = "left", 
+          column_names_side = "top",
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          rect_gp = gpar(col = "black", lwd = 0.4),
+          column_names_rot = 90, 
+          row_names_gp = gpar(fontsize = 8),
+          column_names_gp = gpar(fontsize = 8), 
+          show_heatmap_legend = FALSE,
+          
+          # This layer draws the translucent purple where the combined Algo has a hit
+          cell_fun = function(j, i, x, y, width, height, fill) {
+            if (overlayMat[i, j] == 1) {
+              grid.circle(x, y, r =unit(0.007, "snpc"), # r = 0.01 is a full square 
+                        gp = gpar(fill = "black", col = "blue", alpha = 0.5))
+            }
+          },
+          
+          # Maintain grid lines
+          layer_fun = function(j, i, x, y, width, height, fill) {
+            nRow = nrow(baseMat); nCol = ncol(baseMat)
+            vIdx = seq(5, nCol - 1, by = 5); hIdx = seq(5, nRow - 1, by = 5)
+            if(length(vIdx) > 0) {
+              grid.segments(x0 = unit(vIdx / nCol, "npc"), y0 = unit(0, "npc"),
+                            x1 = unit(vIdx / nCol, "npc"), y1 = unit(1, "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+            if(length(hIdx) > 0) {
+              grid.segments(x0 = unit(0, "npc"), y0 = unit(1 - (hIdx / nRow), "npc"),
+                            x1 = unit(1, "npc"), y1 = unit(1 - (hIdx / nRow), "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+          })
+}
+
 ```
 
-@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al[@hutten2025] Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al is displayed in a table at the end of the document. Matrices generated using R library complexheatmap[@gu2022;@gu2014]. *This matrix was reconstructed by hand, and though it was checked for consistency against the original, it can't be guaranteed that it is free from transcription error.*
+@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al[@hutten2025] Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al is displayed in a table at the end of the document. Matrices generated using R library complexheatmap[@gu2022;@gu2014]. *This matrix was reconstructed by manually transcribing data from the figure in the original paper, and though it was checked for consistency against the original, it can't be guaranteed that it is free from transcription error.*
 
 
 
@@ -370,7 +424,7 @@ plotAbxHeatmapWithNumbers(
 
 # Direct Matching (PenicillinX Original)
 
-The existing direct matching algorithm from PenicillinX web app.[@liamjones2025] Compares molecular structures directly using graph based comparisons of side chain SMILES. Sensitivity is limited, and often does not account for R1 alterations in side chain moieties that do not change allergenic potential.
+The existing direct matching algorithm from PenicillinX web app.[@liamjones2025] Compares molecular structures directly using graph based comparisons of side chain SMILES[@weininger1988]. It does not produce false positives, however sensitivity is limited, and often does not account for R1 alterations in side chain moieties that do not change allergenic potential.
 
 ```{r DirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using PenicillinX direct matching algorithm"}
 #| fig-width: 10
@@ -395,9 +449,9 @@ permissiveDirectMatchStats <- calculateStats("permissiveDirectMatch.csv", hutten
 
 \newpage
 
-# Dice Similarity with Morgan Fingerprinting
+# Morgan Fingerprinting with Dice Coefficient 
 
-This method utilises Morgan circular fingerprints,[@morgan1965] which iteratively encodes the local atomic environment into a bit vector. These fingerprints are then compared between two side chains using the Dice Coefficient. The Dice coefficient assigns values to molecular structures, and weighs shared features more heaviliy than the total feature set, providing a measure of structural overlap. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where S~AB~ is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule.
+This method utilises Morgan circular fingerprints,[@morgan1965] which iteratively encodes the local atomic environment into a bit vector. These fingerprints are then compared between two side chains using the Dice Coefficient[@dice1945:@cereto-massague2015]. The Dice coefficient assigns values to molecular structures, and weighs shared features more heaviliy than the total feature set, providing a measure of structural overlap. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where S~AB~ is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule.
 
 ```{r morganDiceChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Dice Similarity "}
 #| fig-width: 10
@@ -407,9 +461,9 @@ morganDiceStats <- calculateStats("morganDice.csv", huttenMat)
 ```
 \newpage
 
-# Tanimoto Similarity with Morgan Fingerprinting
+# Morgan Fingerprinting with Tanimoto Coefficient 
 
-A variation of the previous algorithm that instead utilises the Tanimoto Coefficient. Similar in concept to the Dice Coefficient, but with a different weight applied to matching substructures. Previous modelling in this project indicated that the Dice Coefficient strictly dominates the Tanimoto Coefficient, in detecting cross reactivity. Thus analyses using Tanimoto have been excluded from the final analysis.
+A variation of the previous algorithm that instead utilises the Tanimoto Coefficient[@bajusz2015]. Similar in concept to the Dice Coefficient, but with a different weight applied to matching substructures. Previous modelling in this project indicated that the Dice Coefficient strictly dominates the Tanimoto Coefficient, in detecting cross reactivity. Thus analyses using Tanimoto have been excluded from the final analysis.
 \begin{equation} S_{AB} = \frac{C}{A + B - C} \end{equation}
 
 ```{r morganTanimotoChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Tanimoto Similarity "}
@@ -420,7 +474,7 @@ morganTanimotoStats <- calculateStats("morganTanimoto.csv", huttenMat)
 ```
 
 
-# Pharmacocore with Dice Similarity
+# Pharmacocore with Dice Coefficient
 
 Pharmacocore fingerprinting maps the chemical characteristics of atoms and functional groups, such as hydrogen bond acceptors/donors, aliphatics/aromtatics. The Dice coefficient is then applied to attempt to model how an IgE molecule may 'perceive' a side chain's binding potential regardless of non-functional differences in the molecular structure.[@cereto-massague2015]
 
@@ -431,7 +485,7 @@ plotAbxHeatmap("pharmacoDice.csv", "Pharmacocore Dice Similarity", colorRamp2(c(
 pharmacoDiceStats <- calculateStats("pharmacoDice.csv", huttenMat)
 ```
 
-# MACCS with Dice Similarity
+# MACCS with Dice Coefficient
 <!--Changed from Tanimoto, remember to change variable names.
 -->
 
@@ -458,10 +512,25 @@ plotAbxHeatmap("mcsOverlap.csv", "Maximum Common Substructure Overlap", colorRam
 mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 ```
 
-# Atom Pairs with Dice Similarity
+# Atom Pairs With Dice Coefficient
 
-Add description later. Original paper[@carhart1985] Picard et al usage[@picard2019]
-
+The Atom Pairs descriptor[@carhart1985], provides a topological representation based on relationships between every possible pair of non-hydrogen atoms within a given molecule. The descriptor records the chemical nature of each pair of atoms, comprising; atomic number, number of neighbouring atoms, and number of bonding pi-electrons. A value is assigned based on the shortest interatomic distance between the pair. The atomic properties and the interatomic distance combined are referred to as a 'triplet'. These are then aggregated into a vector, comprising a bit in the fingerprint. The atom pairs algorithm, with Tanimoto coefficient was used by Picard et al[@picard2019], using the now defunct ChemMine tool[@backman2011] to assign similarity scores to various $\beta$-lactam antibiotics, then applying these values along with empirical risk of cross reactivity in a linear regression analysis. Picard et al however, did not attempt to make formal predictions on the cross reactivity of particular $\beta$-lactams using defined similarity thresholds. Additionally, the Tanimoto Coefficient produces less robust results than using the Dice Coefficient.
+<!--
+- Descriptor Topological representation of molecule.
+- Based on relationships between every possible pair of non-hydrogen atoms within the molecule. 
+- Analyses the spatial arrangement of the features within a molecule
+- Records the chemical nature of two atoms within the molecule and the topological distance between them.
+- Key properties include
+  - Atomic number
+  - Number of neighbours
+  - Number of bonding pi-electrons  
+A value is also assigned based on the shortest path between the pair of atoms.   
+- These values make up a triplet, which are then aggregated into a vector, making up a bit in the fingerprint.
+(Atom 1 description) - (separation) - (atom 2 description)
+- C, O, N, S, F, Cl, Br, I, P, Si, B, Se, and
+As are represented explicitly in our current programs. The
+generic symbol “Y” is used for atoms of any other type.
+Defined in this way -->
 ```{r atomPairsChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Atom Pairs with Dice Similarity"}
 #| fig-width: 10
 #| fig-height: 10
@@ -469,36 +538,7 @@ plotAbxHeatmap("atomPairsDice.csv", "Atom Pairs Dice Similarity", colorRamp2(c(-
 atomPairsStats <- calculateStats("atomPairsDice.csv", huttenMat)
 ```
 
-```{python}
-#| label: ensembleMaker #i.e. combo
-#| echo: false
-#| include: true
-import pandas as pd
-import numpy as np
-
-# Add existing charts
-files = ["directMatch.csv", "morganDice.csv", 
-         "pharmacoDice.csv", "maccsDice.csv", "permissiveDirectMatch.csv", "atomPairsDice.csv","mcsOverlap.csv"]
-# "mcsOverlap.csv" - Currently [readded for testing] as sensitivity+specificity lower than MACCS , "morganTanimoto.csv removed"
-
-# Set index
-dataframes = [pd.read_csv(f, index_col=0) for f in files]
-
-#set true if ANY matrix has a 1
-ensembleMask = (dataframes[0] == 1)
-for df in dataframes[1:]:
-    ensembleMask |= (df == 1)
-
-# Convert Boolean to Integers
-ensembleDf = ensembleMask.astype(int)
-
-# Adds the -1s back down middle
-np.fill_diagonal(ensembleDf.values, -1)
-
-ensembleDf.to_csv("ensembleMatch.csv")
-
-
-```
+\newpage
 
 ```{python}
 #| label: ensembleMaker
@@ -515,7 +555,7 @@ files = ["directMatch.csv", "morganDice.csv", "pharmacoDice.csv",
 # Load all dataframes
 dataframes = [pd.read_csv(f, index_col=0) for f in files]
 
-# 1. Create the Binary Mask (Any match = 1) for the background colors
+# Create the Binary Mask for the background colours
 ensembleMask = (dataframes[0] == 1)
 for df in dataframes[1:]:
     ensembleMask |= (df == 1)
@@ -523,8 +563,8 @@ ensembleDf = ensembleMask.astype(int)
 np.fill_diagonal(ensembleDf.values, -1)
 ensembleDf.to_csv("ensembleMatch.csv")
 
-# 2. Create the Count Matrix (Sum of hits) for the labels
-# We convert each DF to 0/1 and sum them up
+#Create the Count Matrix for the labels
+# convert each DF to 0/1 and sum them up
 ensembleCountDf = pd.DataFrame(0, index=ensembleDf.index, columns=ensembleDf.columns)
 for df in dataframes:
     # Ensure we only count actual '1's (ignoring -1s)
@@ -533,31 +573,67 @@ for df in dataframes:
 # Set diagonal to -1 so the heatmap function knows to ignore/grey them out
 np.fill_diagonal(ensembleCountDf.values, -1)
 ensembleCountDf.to_csv("ensembleCounts.csv")
-``
+
+```
 
 
-# All algorithms combined
+# All Algorithms Combined
 
-A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms). MCS overlap has been re-added after further tweaking, having been removed in earlier iterations due to poor sensitivity. Atom-Pairs algorithm has been added 
+A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms). MCS overlap has been re-added after further tweaking, having been removed in earlier iterations due to poor sensitivity. Atom-Pairs algorithm has been added. Cells are labelled with the number of individual algorithms indicating a potential cross reaction.
 
-```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms"}
+<!--{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms"}
 #| label: fig-combo
 #| fig-width: 10
 #| fig-height: 10
 plotAbxHeatmap("ensembleMatch.csv", "Combined Algorithm Performance", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
 ```
+-->
 
-# Hutten et al. without discrepants
-
-A re-creation of the Hutten et al[@hutten2025] Matrix with missing values and discrepant matches changed from red and white to green respectively. Currently present purely to aid in visual comparisons.
-
-```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Hutten with discrepants and missing values set to green for better visual comparison"}
-#| label: fig-huttensineDiscrepant
+```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms with hit counts"}
+#| label: fig-combo
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("Original.csv", "Hutten et al conformed.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#A9D08F","#A9D08F")))
+
+ 
+comboColors <- colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
+
+plotAbxHeatmapWithNumbers(
+  colorCsvPath = "ensembleMatch.csv",   # Sets the background color (Red/Green)
+  numbersCsvPath = "ensembleCounts.csv", # Sets the overlaid text (0-7)
+  chartTitle = "Combined Algorithm Performance", 
+  colMapping = comboColors
+)
+
+# calculate the stats using the binary matrix
+ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
+
 ```
+
+
+# Hutten et al. with Superimposed Algorithm Predictions
+
+A re-creation of the Hutten et al[@hutten2025] Matrix with black circles representing algorithmically predicted cross reactions seen in @fig-combo.
+
+
+```{r fig-superimposed-audit, echo=FALSE, message=FALSE, fig.cap="Algorithim predictions superimposed over Hutten et al. Matrix."}
+#| fig-width: 10
+#| fig-height: 10
+
+# Define your standard Hutten colors
+huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3), 
+                           c("#808080", "#A9D08F", "#FF0000", "#CF734F", "#FFFFFF"))
+
+plotSuperimposedHeatmap(
+  baseCsvPath = "Original.csv",           
+  overlayCsvPath = "ensembleMatch.csv",   
+  chartTitle = "Superimposed Matrices", 
+  baseColMapping = huttenColors
+)
+
+```
+
+
 
 
 
