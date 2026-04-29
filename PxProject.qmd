@@ -168,7 +168,7 @@ plotSuperimposedHeatmap <- function(baseCsvPath, overlayCsvPath, chartTitle, bas
           cell_fun = function(j, i, x, y, width, height, fill) {
             if (overlayMat[i, j] == 1) {
               grid.circle(x, y, r =unit(0.007, "snpc"), # r = 0.01 is a full square 
-                        gp = gpar(fill = "black", col = "blue", alpha = 0.5))
+                        gp = gpar(fill = "black", col = "white", alpha = 0.5))
             }
           },
           
@@ -451,7 +451,7 @@ permissiveDirectMatchStats <- calculateStats("permissiveDirectMatch.csv", hutten
 
 # Morgan Fingerprinting with Dice Coefficient 
 
-This method utilises Morgan circular fingerprints,[@morgan1965] which iteratively encodes the local atomic environment into a bit vector. These fingerprints are then compared between two side chains using the Dice Coefficient[@dice1945:@cereto-massague2015]. The Dice coefficient assigns values to molecular structures, and weighs shared features more heaviliy than the total feature set, providing a measure of structural overlap. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where S~AB~ is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule.
+This method utilises Morgan circular fingerprints,[@morgan1965] which iteratively encodes the local atomic environment into a bit vector. These fingerprints are then compared between two side chains using the Dice Coefficient[@dice1945;@cereto-massague2015]. The Dice coefficient assigns values to molecular structures, and weighs shared features more heaviliy than the total feature set, providing a measure of structural overlap. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where S~AB~ is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule.
 
 ```{r morganDiceChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Dice Similarity "}
 #| fig-width: 10
@@ -489,7 +489,7 @@ pharmacoDiceStats <- calculateStats("pharmacoDice.csv", huttenMat)
 <!--Changed from Tanimoto, remember to change variable names.
 -->
 
-This method utilises Molecular Access System(MACCS) keys, a specific type of pre-defined, publicly available structural fragment definition. There are 166 public fragment definitions in the RDKit implementation. A bit string is generated with reference to the presence or absence of certain features, for example, < 3 oxygens, S-S bond, or ring of size 4, etc.[@greglandrum2023:@joseaniceto2023] This method attempts to capture broad structural classes and motifs rather than atom-by-atom circular fingerprints.
+This method utilises Molecular Access System(MACCS) keys, a specific type of pre-defined, publicly available structural fragment definition. There are 166 public fragment definitions in the RDKit implementation. A bit string is generated with reference to the presence or absence of certain features, for example, < 3 oxygens, S-S bond, or ring of size 4, etc.[@greglandrum2023;@joseaniceto2023] This method attempts to capture broad structural classes and motifs rather than atom-by-atom circular fingerprints.
 
 ```{r MACCSDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using MACCS keys with Dice Similarity "}
 #| fig-width: 10
@@ -843,7 +843,7 @@ run_tp_analysis(tp_mask, "True Positives in agreement with Hutten et al.")
 ```
 
 
-
+## PR Curve
 
 ```{python}
 #| label: fig-combined-pr-curve
@@ -958,6 +958,23 @@ print(r"\begin{center}")
 print(r"\includegraphics[width=0.9\textwidth]{combined_pr_curve.png}")
 print(r"\end{center}")
 ```
+
+
+## Other studies
+
+
+| Reference            | Index Abx   | Challenge Abx | Study +ve | Hutten et al +ve | PX +ve |
+| -------------------- | ----------- | ------------- | --------- | ---------------- | ------ |
+| Touati et al 2021    | Cefotaxime  | Cefradine     | Y         | N(1)             | N      |
+|                      | Cefotaxime  | Cefalotin     | Y         | Y(3)             | N      |
+|                      | Cefotaxime  | Cefuroxime    | Y         | Y(3)             | Y(3)   |
+|                      | Cefatrizine | Amoxicillin   | Y         | Y(2)             | Y(7)   |
+|                      | Cefadroxil  | Amoxicillin   | Y         | Y(3)             | Y(7)   |
+| Stevensen et al 2025 | Cefazolin   | Cefalexin     | N         | D(3)             | N      |
+|                      | Cefepime    | Penicillin VK | N         | N(3)             | N      |
+
+: Cross reference of OPCs results from other studies[@stevenson2025;@touati2021] with outcomes recorded in Hutten et al, as well as PenicillinX predicted result. Y:positive, N:Negative, D:Discrepant. Bracketed values correspond to number of included studies and number of algorithmic hits respectively {#tbl-CrossCheck}
+
 
 
 <!--{python}
