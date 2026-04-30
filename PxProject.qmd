@@ -655,7 +655,7 @@ J = \text{Sensitivity} + \text{Specificity} - 1
 #| label: tbl-performanceTable
 #| echo: false
 #| include: true
-#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, PD:Pharmacocore-Dice, MCS:Maximum Common Substructure, APD:Atom Pairs-Dice."
+#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, Pharmaco:Pharmacocore, MCS:Maximum Common Substructure, AP:Atom Pairs."
 #| tbl-pos: H
 
 from IPython.display import Markdown
@@ -685,7 +685,7 @@ table = [
     ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], apd['specificity'], ens['specificity']]
 ]
 
-headers = ["Metric", "DM", "MD", "PDM", "Ph-Dice", "MCS", "MACCS Dice","APD","Combo"]
+headers = ["Metric", "DM", "MD", "PDM", "Pharmaco", "MCS", "MACCS","AP","Combo"]
 
 # Creates the main table first
 tableLatex = tabulate(table, headers=headers, tablefmt="latex_booktabs")
@@ -723,7 +723,7 @@ try:
     algo_files = {
         "DM": "directMatch.csv",
         "PDM": "permissiveDirectMatch.csv",
-        "Morgan": "morganDice.csv",
+        "MD": "morganDice.csv",
         "Pharmaco": "pharmacoDice.csv",
         "MCS": "mcsOverlap.csv",
         "MACCS": "maccsDice.csv",
@@ -959,7 +959,7 @@ print(r"\includegraphics[width=0.9\textwidth]{combined_pr_curve.png}")
 print(r"\end{center}")
 ```
 
-
+\newpage
 ## Other studies
 
 
