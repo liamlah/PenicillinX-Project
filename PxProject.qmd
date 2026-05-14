@@ -8,6 +8,7 @@ format:
 bibliography: My Library.bib
 csl: https://www.zotero.org/styles/american-medical-association
 toc: true
+papersize: a4
 fig-dpi: 300
 fig-pos: H
 header-includes:
@@ -485,6 +486,8 @@ plotAbxHeatmap("pharmacoDice.csv", "Pharmacocore Dice Similarity", colorRamp2(c(
 pharmacoDiceStats <- calculateStats("pharmacoDice.csv", huttenMat)
 ```
 
+\newpage
+
 # MACCS with Dice Coefficient
 <!--Changed from Tanimoto, remember to change variable names.
 -->
@@ -497,7 +500,7 @@ This method utilises Molecular Access System(MACCS) keys, a specific type of pre
 plotAbxHeatmap("maccsDice.csv", "MACCS Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 maccsDiceStats <- calculateStats("maccsDice.csv", huttenMat)
 ```
-
+\newpage
 
 # Maximum Common Substructure (MCS) Overlap
 
@@ -511,6 +514,8 @@ S_{MCS} = \frac{|MCS(A,B)|}{\min(|A|, |B|)}
 plotAbxHeatmap("mcsOverlap.csv", "Maximum Common Substructure Overlap", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
 ```
+
+\newpage
 
 # Atom Pairs With Dice Coefficient
 
@@ -610,6 +615,7 @@ ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
 
 ```
 
+\newpage
 
 # Hutten et al. with Superimposed Algorithm Predictions
 
