@@ -403,10 +403,12 @@ save_matrix(permissiveMatchDf, 'permissiveDirectMatch.csv')
 
 
 
-```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix manually re-created from Hutten et al."}
+```{r echo=FALSE, include=TRUE, message=FALSE}
 #| label: fig-huttenChart
 #| fig-width: 10
 #| fig-height: 10
+#| fig-cap: "Cross reactivity matrix manually re-created from Hutten et al. Note: white:no data; Grey:cross-tabulation similar; Green:no crossreactivity; Safe; Orange:Cinically relevant discrepancy between studies; Red:(potential) crossreactivity: unsafe; N: nNumber of authors describing this potential cross reactivity as tabulated by Hutten et al"
+
 
 huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3), 
                            c("#808080", "#A9D08F", "#FF0000", "#CF734F", "#FFFFFF"))
@@ -622,9 +624,10 @@ ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
 A re-creation of the Hutten et al[@hutten2025] Matrix with black circles representing algorithmically predicted cross reactions seen in @fig-combo.
 
 
-```{r fig-superimposed-audit, echo=FALSE, message=FALSE, fig.cap="Algorithim predictions superimposed over Hutten et al. Matrix."}
+```{r fig-superimposed-audit, echo=FALSE, message=FALSE}
 #| fig-width: 10
 #| fig-height: 10
+#| fig.cap: "Algorithim predictions superimposed over Hutten et al. Matrix. Note: white:no data; Grey:cross-tabulation similar; Green:no crossreactivity; Safe; Orange:Cinically relevant discrepancy between studies; Red:(potential) crossreactivity: unsafe; Grey circle: Cross reactivity predicted by algorithm" 
 
 # Define your standard Hutten colors
 huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3), 
