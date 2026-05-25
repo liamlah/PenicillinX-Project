@@ -1181,7 +1181,10 @@ print(r"\end{tcolorbox}")
 
 
 <!-- 
+
+
 # Todo
+- What if i change thresholds, but then require agreement between at least 2 algorithms?
 - Standardise legacy Rmarkdown formatting to Quarto
 - optimisation algorithm
 - continue optimising permissive match
