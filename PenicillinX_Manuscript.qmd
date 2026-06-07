@@ -8,6 +8,7 @@ format:
     number-sections: false
     link-citations: true
     cite-method: citeproc
+    fontsize: 12pt
     geometry:
       - margin=1in
     header-includes: |
@@ -35,8 +36,8 @@ csl: https://www.zotero.org/styles/the-journal-of-allergy-and-clinical-immunolog
 - Short, relevant title
 - Complete title page - check
 - 10 key words
-- 1-2 sentences max 40 words summarise clincial implications
-- Max 9 references ( Current total: )
+- 1-2 sentences max 40 words summarise clinical implications
+- Max 9 references ( Current total: 2 )
 - Max 2 figures or tables
 -->
 
@@ -49,7 +50,7 @@ csl: https://www.zotero.org/styles/the-journal-of-allergy-and-clinical-immunolog
 
 - Empirical data on cross reactivity between 51 $\beta$-lactam antibiotics collated by Hutten et al[@hutten2025] was transcribed and used as the validation for the model.
 
-- Open source cheminformatics library, RDKit used to generate molecular descriptors using various methods; Direct Match SMILES, Direct Match SMARTS, Morgan coefficient, Pharmacocore, Atom Pairs, MACCS, and Maximum common substructure.
+- Open source chemoinformatics library, RDKit used to generate molecular descriptors using various methods; Direct Match SMILES, Direct Match SMARTS, Morgan coefficient, Pharmacophore, Atom Pairs, MACCS, and Maximum common substructure.
 
 - With models X, bitstrings/bitvectors generated from the R1/R2 side chains of each $\beta$-lactam, which are then compared, and a similarity score generated. 
 
@@ -71,20 +72,43 @@ csl: https://www.zotero.org/styles/the-journal-of-allergy-and-clinical-immunolog
 # References
 
 -->
+
+
+::: {.no-count}
 Word Count: {{< words-body >}}/1000
 
+# Keywords
+1. Chemoinformatics
+2. SMILES
+3. Cross-Reactivity
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+
+
+\newpage
 # Clinical Implications
-::: {.no-count}
-Cheminformatics algorithms can predict $\beta$-lactam cross reactivity with a high degree of sensitivity and specificity. These predictions may be used to fill gaps in empirical data, or help adjudicate where there is disagreement disharmony in the published literature.
+
+Intelligent<!--better word--> application of chemoinformatics algorithms can predict $\beta$-lactam cross reactivity with a high degree of sensitivity and specificity. These predictions may be used to fill gaps in empirical data, or help adjudicate where there is disharmony in the published literature.
 :::
 \
 A Recent publication collating cross reactivity data for 1275 combinations of $\beta$-lactam antibiotics[@hutten2025] found 272 instances of clinically relevant 'disharmony' between source authors, 356 situations where there was no data on cross reactivity between a pair of antibiotics, and 1104 situations where there was only one source of information.
 
-We proposed that greater similarity between the R side chains of a pair of $\beta$-lactam antibiotics should correlate with a greater risk of immune cross reactivity. This concept was briefly investigated by Picard et al[@picard2019], using a single chemical descriptor. However findings were &&&&&&&&.
+We proposed that greater similarity between the R side chains of a pair of $\beta$-lactam antibiotics should correlate with a greater risk of immune cross reactivity. This concept was briefly investigated by Picard et al[@picard2019], using a single chemical descriptor. However findings were &&&&&&&&. <!--Intuitive but difficult to measure-->
 
-Since 'similarity' between two molecules would vary depending on what criteria is used, a model was designed combining the scores of multiple different cheminformatics algorithms, each utilising a unique method of generating a chemical descriptor to compare similarity between a pair of $\beta$-lactam side chains.
+Since 'similarity' between two molecules would vary depending on what criteria is used, a model was designed combining the scores of multiple different chemoinformatics algorithms, each utilising a unique method of generating a chemical descriptor to compare similarity between a pair of $\beta$-lactam side chains.
 
-Empirical data on cross reactivity between 1275 combinations of $\beta$-lactam antibiotics collated by Hutten et al[@hutten2025] was transcribed to a spreadsheet and used as the validation for the model. the open source cheminformatics library, 'RDKit' was used to generate molecular descriptors using various methods; Direct Match, SMILES, Direct Match SMARTS, Morgan coefficient, Pharmacocore, Atom Pairs, MACCS, and Maximum common substructure.&&& With models X, bitstrings/bitvectors generated from the R1/R2 side chains of each $\beta$-lactam, which are then compared, and a similarity score generated. A pair of side chains are predicted to be cross reactive if their similarity score exceeds a pre-set threshold for an individual algorithm. Results are additive meaning that if the similarity score of a pair exceeds the threshold of one or more algorithms, then overall, the pair is predicted to be cross reactive. If the similarity score fails to exceed the threshold of any algorithms, a pair is predicted to not be cross reactive.
+<!--Maybe some intro to chemoinformatics?
+i.e. used in drug discover
+
+
+-->
+
+Empirical data on cross reactivity between 1275 combinations of $\beta$-lactam antibiotics collated by Hutten et al[@hutten2025] was transcribed to a spreadsheet and used as the validation for the model. The chemical structure of each of these antibiotics were retrieved from the Reaxys® database[@reaxys2009], split into their component parts (Side chains, $\beta$-lactam ring, and fused ring) and stored in SMILES format. A workflow using Python and RDKit[@RDKit2025] was used to generate molecular descriptors using various methods; Substructure Match SMILES, Substructure Match SMARTS, Morgan coefficient, Pharmacophore, Atom Pairs, MACCS, and Maximum common substructure.&&& With models X, bitstrings/bitvectors generated from the R1/R2 side chains of each $\beta$-lactam, which are then compared, and a similarity score generated. A pair of side chains are predicted to be cross reactive if their similarity score exceeds a pre-set threshold for an individual algorithm. Results are additive meaning that if the similarity score of a pair exceeds the threshold of one or more algorithms, then overall, the pair is predicted to be cross reactive. If the similarity score fails to exceed the threshold of any algorithms, a pair is predicted to not be cross reactive.
 The results were collated into a single chart in the same fashion as presented by Hutten et al[@hutten2025]. Combined performance of the algorithms are validated using the empirical data provided by Hutten et al. For the purposes of validation, results presented by Hutten et al where there is no discrepancy between the source data are considered to be true. 
 Thresholds for each individual algorithm were calibrated to maximise agreement with results presented by Hutten et al where there was no discrepancy between source data on potential cross reactivity and no cross reactivity, with model performance measured by calculating a Youden's J from sensitivity and specificity. Measurements of sensitivity and specificity were agnostic to molecular pairs where there was either no data available, or discrepancy between source data, effectively resulting in the model making 'predictions' for these pairs. Performance was ultimately maximised trialling two different methods. Firstly by running a simulation that concurrently randomised each individual threshold and measured the resulting overall performance, with 10 million iterations of this randomisation method run. Second by an evolutionary method:
 
@@ -92,9 +116,9 @@ The results of the model as presented in figure 1&&& are represented as dots sup
 
 Of these cross reactivity predictions, there is a range of agreement between algorithms from full agreement, partial, down to a single algorithm predicting, which represents a theoretical 'confidence' in the result. As more than one algorithm flagging positive means a greater likelihood that a similarity is not artefactual, and represents something significant in the similarity between two molecules.
 
-To our knowledge, since 2019[@picard2019] no further published literature investigating the capability of cheminformatics algorithms to characterise similarity between $\beta$-lactam side chains, and none that have been robust enough to make formal predictions, or to support empirical data in cases where it exists, but remains in dispute. 
+To our knowledge, since 2019[@picard2019] no further published literature investigating the capability of chemoinformatics algorithms to characterise structural similarity between $\beta$-lactam side chains and relate this to cross-reactivity, and none that have been robust enough to make formal predictions, or to support empirical data in cases where it exists, but remains in dispute. 
 
-While cheminformatics is a well established field, used heavily in drug discovery and &&&, its use in this application still remains relatively unexplored. This model, while performing impressively&&&, is unlikely to represent the most optimal possible method of characterising and comparing $\beta$-lactam side chains and predicting cross reactivity. Further experimentation and validation in this field is likely to yield even more precise and reliable models. With that reliability and would come utility in acute situations where alternative $\beta$-lactam antibiotics are required to treat a patient with a recorded allergy. 
+While chemoinformatics is a well established field, used heavily in drug discovery and &&&, its use in this application still remains relatively unexplored. This model, while performing impressively&&&, is unlikely to represent the most optimal possible method of characterising and comparing $\beta$-lactam side chains and predicting cross reactivity. Further experimentation and validation in this field is likely to yield even more precise and reliable models. With that reliability and would come utility in acute situations where alternative $\beta$-lactam antibiotics are required to treat a patient with a recorded allergy. 
 
 ::: {.no-count}
 # Acknowledgements
