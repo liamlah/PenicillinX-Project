@@ -477,14 +477,14 @@ morganTanimotoStats <- calculateStats("morganTanimoto.csv", huttenMat)
 ```
 
 
-# Pharmacocore with Dice Coefficient
+# Pharmacophore with Dice Coefficient
 
-Pharmacocore fingerprinting maps the chemical characteristics of atoms and functional groups, such as hydrogen bond acceptors/donors, aliphatics/aromtatics. The Dice coefficient is then applied to attempt to model how an IgE molecule may 'perceive' a side chain's binding potential regardless of non-functional differences in the molecular structure.[@cereto-massague2015]
+Pharmacophore fingerprinting maps the chemical characteristics of atoms and functional groups, such as hydrogen bond acceptors/donors, aliphatics/aromtatics. The Dice coefficient is then applied to attempt to model how an IgE molecule may 'perceive' a side chain's binding potential regardless of non-functional differences in the molecular structure.[@cereto-massague2015]
 
-```{r PharmacoDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Pharmacocores"}
+```{r PharmacoDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Pharmacophores"}
 #| fig-width: 10
 #| fig-height: 10
-plotAbxHeatmap("pharmacoDice.csv", "Pharmacocore Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+plotAbxHeatmap("pharmacoDice.csv", "Pharmacophore Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
 pharmacoDiceStats <- calculateStats("pharmacoDice.csv", huttenMat)
 ```
 
@@ -664,7 +664,7 @@ J = \text{Sensitivity} + \text{Specificity} - 1
 #| label: tbl-performanceTable
 #| echo: false
 #| include: true
-#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, Pharmaco:Pharmacocore, MCS:Maximum Common Substructure, AP:Atom Pairs."
+#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, Pharmaco:Pharmacophore, MCS:Maximum Common Substructure, AP:Atom Pairs."
 #| tbl-pos: H
 
 from IPython.display import Markdown
