@@ -131,21 +131,19 @@ Thresholds for each individual algorithm were calibrated to maximise agreement w
 | **Specificity** | 1 | 0.995 | 0.998 | 1.0 | 0.998 | 0.89 | 0.986 | 0.971 |
 | \midrule \textbf{Youden’s J} | 0.512 | 0.595 | 0.541 | 0.273 | 0.702 | 0.731 | 0.708 | 0.854 |
 
-: Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, Pharmaco:Pharmacophore, MCS:Maximum Common Substructure, AP:Atom Pairs. {#tbl-performanceTable tbl-colwidths="[23,10.5,10.5,10.5,16,10.5,10.5,7,10.5]"}
+: Compared performance of each algorithm. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, Pharmaco:Pharmacophore, MCS:Maximum Common Substructure, AP:Atom Pairs. {#tbl-performanceTable tbl-colwidths="[23,10.5,10.5,10.5,16,10.5,10.5,7,10.5]"}
 
-The results of the model as presented in @fig-matrix are represented as dots superimposed over a reproduction of the figure from Hutten et al for predicted cross reactivity. As shown in @tbl-performanceTable the model shows a high level of sensitivity (0.882), and very high specificity (0.971). The model makes 24 predictions of cross reactivity for which there exists no empirical data, and 30 predictions of cross-reactivity where there is disharmony between authors. 
-
-Of these cross reactivity predictions, there is a range of agreement between algorithms from full agreement, partial, down to a single algorithm predicting, which represents a theoretical 'confidence' in the result. As more than one algorithm flagging positive means a greater likelihood that a similarity is not artefactual, and represents something significant in the similarity between two molecules.
+The results of the model as presented in @fig-matrix are represented as dots superimposed over a reproduction of the figure from Hutten et al[@hutten2025] for predicted cross reactivity. As shown in @tbl-performanceTable the model shows a high level of sensitivity (0.882), and very high specificity (0.971). The model makes 24 predictions of cross reactivity for which there exists no empirical data and 30 predictions of cross-reactivity where there is disharmony between authors. Of these cross reactivity predictions, there is a range of agreement between algorithms from full agreement, partial, down to a single algorithm predicting, which represents a theoretical 'confidence' in the result. As more than one algorithm flagging positive means a greater likelihood that a similarity is not artefactual, and represents something significant in the similarity between two molecules.
 
 To our knowledge, since 2019[@picard2019] no further published literature investigating the capability of chemoinformatics algorithms to characterise structural similarity between $\beta$-lactam side chains and relate this to cross-reactivity, and none that have been robust enough to make formal predictions, or to support empirical data in cases where it exists, but remains in dispute. 
 
-While chemoinformatics is a well established field, used heavily in drug discovery and &&&, its use in this application still remains relatively unexplored. This model, while performing impressively&&&, is unlikely to represent the most optimal possible method of characterising and comparing $\beta$-lactam side chains and predicting cross reactivity. Further experimentation and validation in this field is likely to yield even more precise and reliable models. With that reliability and would come utility in acute situations where alternative $\beta$-lactam antibiotics are required to treat a patient with a recorded allergy. 
+While chemoinformatics is a well established field, used heavily in drug discovery and molecular design, its use in this application still remains relatively unexplored. This model, while performing impressively, is unlikely to represent the most optimal possible method of characterising and comparing $\beta$-lactam side chains and predicting cross reactivity. Further experimentation and validation in this field is likely to yield even more precise and reliable models. With that reliability and would come utility in acute situations where alternative $\beta$-lactam antibiotics are required to treat a patient with a recorded allergy. 
 
 ::: {.no-count}
 # Acknowledgements
 
 L. Jones contributed to the concept, design and data analysis, as well as drafting the manuscript.
-M. Lucas and M.Taggart provided guidance on validation design, and interpretation, as well as assistance with editing the manuscript.
+M. Lucas and M.Taggart provided guidance on validation design, interpretation, as well as assistance with editing the manuscript.
 
 :::
 # References
