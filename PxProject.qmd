@@ -639,7 +639,18 @@ plotSuperimposedHeatmap(
   chartTitle = "Superimposed Matrices", 
   baseColMapping = huttenColors
 )
+# Creates output png for my manuscript
+#dev.copy(
+#  device = png, 
+#  filename = "fig_superimposed_matrix.png", 
+#  width = 10, 
+#  height = 10, 
+#  units = "in", 
+#  res = 300
+#)
 
+#  close
+#dev.off()
 ```
 
 
@@ -705,6 +716,7 @@ tableLatex = tableLatex.replace(r"\bottomrule",
                                    f"\\midrule\nYouden's J & {youdenrRow} \\\\\n\\bottomrule")
 
 Markdown(tableLatex)
+
 
 ```
 
