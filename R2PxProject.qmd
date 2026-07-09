@@ -1,0 +1,1476 @@
+---
+title: "PenicillinX-Project with R2"
+subtitle: "How accurately can we predict beta-lactam cross reactivity based on molecular descriptors?"
+format:
+  pdf:
+    cite-method: citeproc
+    link-citations: true
+bibliography: My Library.bib
+csl: https://www.zotero.org/styles/american-medical-association
+toc: true
+papersize: a4
+fig-dpi: 300
+fig-pos: H
+header-includes:
+  - \usepackage[margin=1in]{geometry}
+---
+
+\newpage
+
+<!-- # Introduction
+
+[@grisoni2018]
+
+-->
+
+# Hutten et al.
+
+```{r echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix re-created from Hutten et al."}
+#| label: OriginalChart
+library(ComplexHeatmap)
+library(circlize)
+# Make sure Gu are cited for the above libraries if published
+# [@gu2014]
+# [@gu2022]
+
+# Legend for Original.csv/Hutten et al. | NB: These are unrelated to the numbers displayed in the corresponding plot from the original publication
+#-1 = Same Antibiotic on X/Y | Grey
+# 0 = No cross reaction | Green
+# 1 = Cross reaction | Red
+# 2 = Discrepancy between studies | Brown
+# 3 = No data | White
+
+huttenMat <- as.matrix(read.csv("Original.csv", row.names = 1, check.names = FALSE))
+# Function to calculate the stats
+calculateStats <- function(csvPath, originalMat) {
+  algoMat <- as.matrix(read.csv(csvPath, row.names = 1, check.names = FALSE))
+  algoMat <- algoMat[rownames(originalMat), colnames(originalMat)]
+  
+  list(
+    possibleHits   = sum(originalMat == 1) /2,
+    totalHits      = sum(algoMat == 1) /2,
+    truePositives  = sum(originalMat == 1 & algoMat == 1) /2,
+    trueNegatives  = sum(originalMat == 0 & algoMat == 0) /2,
+    falsePositives = sum(originalMat == 0 & algoMat == 1) /2,
+    falseNegatives = sum(originalMat == 1 & algoMat == 0) /2,
+    noDataHit      = sum(originalMat == 3 & algoMat == 1) /2,
+#   hitRate        = round((sum(originalMat == 1 & algoMat == 1) / sum(originalMat == 1)),  2),
+    sensitivity    = round(sum(originalMat == 1 & algoMat == 1) / (sum(originalMat == 1 & algoMat == 1) + sum(originalMat == 1 & algoMat == 0)),3),
+    specificity    = round(sum(originalMat == 0 & algoMat == 0) / (sum(originalMat == 0 & algoMat == 0) + sum(originalMat == 0 & algoMat == 1)),3),
+    youdensJ       = round((sum(originalMat == 1 & algoMat == 1) / (sum(originalMat == 1 & algoMat == 1) + sum(originalMat == 1 & algoMat == 0))) + 
+                   (sum(originalMat == 0 & algoMat == 0) / (sum(originalMat == 0 & algoMat == 0) + sum(originalMat == 0 & algoMat == 1))) - 1, 3)
+  )
+}
+
+
+# Function to generate Heatmaps
+plotAbxHeatmap <- function(csvPath, chartTitle, colMapping) {
+  localMat <- as.matrix(read.csv(csvPath, row.names = 1, check.names = FALSE))
+  
+  Heatmap(localMat, 
+          name = "Match", 
+          col = colMapping,
+          column_title = chartTitle,
+          row_names_side = "left", 
+          column_names_side = "top",
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          rect_gp = gpar(col = "black", lwd = 0.4), 
+          column_names_rot = 90, 
+          row_names_gp = gpar(fontsize = 8),
+          column_names_gp = gpar(fontsize = 8), 
+          show_heatmap_legend = FALSE,
+          
+          layer_fun = function(j, i, x, y, width, height, fill) {
+            nRow = nrow(localMat)
+            nCol = ncol(localMat)
+            vIdx = seq(5, nCol - 1, by = 5)
+            if(length(vIdx) > 0) {
+              grid.segments(x0 = unit(vIdx / nCol, "npc"), y0 = unit(0, "npc"),
+                            x1 = unit(vIdx / nCol, "npc"), y1 = unit(1, "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+            hIdx = seq(5, nRow - 1, by = 5)
+            if(length(hIdx) > 0) {
+              grid.segments(x0 = unit(0, "npc"), y0 = unit(1 - (hIdx / nRow), "npc"),
+                            x1 = unit(1, "npc"), y1 = unit(1 - (hIdx / nRow), "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+          })
+}
+
+plotAbxHeatmapWithNumbers <- function(colorCsvPath, numbersCsvPath, chartTitle, colMapping) {
+  colorMat <- as.matrix(read.csv(colorCsvPath, row.names = 1, check.names = FALSE))
+  numberMat <- as.matrix(read.csv(numbersCsvPath, row.names = 1, check.names = FALSE))
+  
+  Heatmap(colorMat, 
+          name = "Match", 
+          col = colMapping,
+          column_title = chartTitle,
+          row_names_side = "left", 
+          column_names_side = "top",
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          rect_gp = gpar(col = "black", lwd = 0.0), # was 0.4, changed to 0.0 to mimic look of hutten
+          column_names_rot = 90, 
+          row_names_gp = gpar(fontsize = 8),
+          column_names_gp = gpar(fontsize = 8), 
+          show_heatmap_legend = FALSE,
+          
+          # This overlays the text from the numbers CSV
+          cell_fun = function(j, i, x, y, width, height, fill) {
+            if (numberMat[i, j] != -1) {
+              grid.text(sprintf("%s", numberMat[i, j]), x, y, 
+                        gp = gpar(fontsize = 7, col = "black"))
+            }
+          },
+          
+          layer_fun = function(j, i, x, y, width, height, fill) {
+            nRow = nrow(colorMat)
+            nCol = ncol(colorMat)
+            vIdx = seq(5, nCol - 1, by = 5)
+            if(length(vIdx) > 0) {
+              grid.segments(x0 = unit(vIdx / nCol, "npc"), y0 = unit(0, "npc"),
+                            x1 = unit(vIdx / nCol, "npc"), y1 = unit(1, "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+            hIdx = seq(5, nRow - 1, by = 5)
+            if(length(hIdx) > 0) {
+              grid.segments(x0 = unit(0, "npc"), y0 = unit(1 - (hIdx / nRow), "npc"),
+                            x1 = unit(1, "npc"), y1 = unit(1 - (hIdx / nRow), "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+          })
+}
+
+plotSuperimposedHeatmap <- function(baseCsvPath, overlayCsvPath, chartTitle, baseColMapping) {
+  # Load matrices
+  baseMat <- as.matrix(read.csv(baseCsvPath, row.names = 1, check.names = FALSE))
+  overlayMat <- as.matrix(read.csv(overlayCsvPath, row.names = 1, check.names = FALSE))
+  
+  # Ensure indices are aligned perfectly
+  overlayMat <- overlayMat[rownames(baseMat), colnames(baseMat)]
+
+  Heatmap(baseMat, 
+          name = "Hutten Base", 
+          col = baseColMapping,
+          column_title = chartTitle,
+          row_names_side = "left", 
+          column_names_side = "top",
+          cluster_rows = FALSE, 
+          cluster_columns = FALSE,
+          rect_gp = gpar(col = "black", lwd = 0.0), # change back to 0.4 if needed
+          column_names_rot = 90, 
+          row_names_gp = gpar(fontsize = 8),
+          column_names_gp = gpar(fontsize = 8), 
+          show_heatmap_legend = FALSE,
+          
+          # This layer draws the translucent purple where the combined Algo has a hit
+          cell_fun = function(j, i, x, y, width, height, fill) {
+            if (overlayMat[i, j] == 1) {
+              grid.circle(x, y, r =unit(0.007, "snpc"), # r = 0.01 is a full square 
+                        gp = gpar(fill = "black", col = "white", alpha = 0.5))
+            }
+          },
+          
+          # Maintain grid lines
+          layer_fun = function(j, i, x, y, width, height, fill) {
+            nRow = nrow(baseMat); nCol = ncol(baseMat)
+            vIdx = seq(5, nCol - 1, by = 5); hIdx = seq(5, nRow - 1, by = 5)
+            if(length(vIdx) > 0) {
+              grid.segments(x0 = unit(vIdx / nCol, "npc"), y0 = unit(0, "npc"),
+                            x1 = unit(vIdx / nCol, "npc"), y1 = unit(1, "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+            if(length(hIdx) > 0) {
+              grid.segments(x0 = unit(0, "npc"), y0 = unit(1 - (hIdx / nRow), "npc"),
+                            x1 = unit(1, "npc"), y1 = unit(1 - (hIdx / nRow), "npc"),
+                            gp = gpar(lwd = 1.4, col = "black"))
+            }
+          })
+}
+
+```
+
+@fig-huttenChart is a reconstruction of the matrix detailed in Hutten et al[@hutten2025] Below them are the various molecular matching algorithms and their respective matrices, the performance of each algorithm, as well as their combined performance matching against Hutten et al is displayed in a table at the end of the document. Matrices generated using R library complexheatmap[@gu2022;@gu2014]. *This matrix was reconstructed by manually transcribing data from the figure in the original paper, and though it was checked for consistency against the original, it can't be guaranteed that it is free from transcription error.*
+
+
+
+```{python}
+#| label: algoblock
+#| echo: false
+#| include: true
+import pandas as pd
+import numpy as np
+from rdkit import Chem, DataStructs
+from rdkit.Chem import rdFingerprintGenerator, MACCSkeys, rdFMCS
+from rdkit.Chem.Pharm2D import Gobbi_Pharm2D, Generate
+
+###### Adjust thresholds here #######################
+thresholdMD = 0.4798301174272393 
+thresholdMT = 1.0 # was .56 Ignore
+thresholdPhD = 0.6714348648509474 
+thresholdMAC = 0.7745211777987131 
+thresholdMCS = 0.8998066655545518 
+thresholdAPD = 0.5280548729759067 # 0.7238 # Put back to manual 0.4709
+####### -------------------- ########################
+
+#  \item[PDM (Static):] N/A \hfill \textit{(Sens: 0.572, Spec: 0.998)}
+#  \item[Morgan Dice:] 0.4798301174272393 \hfill \textit{(Sens: 0.650, Spec: 0.995)}
+#  \item[Pharmaco Dice:] 0.6714348648509474 \hfill \textit{(Sens: 0.286, Spec: 1.000)}
+#  \item[MACCS Dice:] 0.7745211777987131 \hfill \textit{(Sens: 0.660, Spec: 0.995)}
+#  \item[Atom Pairs Dice:] 0.5280548729759067 \hfill \textit{(Sens: 0.650, Spec: 0.982)}
+#  \item[MCS Overlap:] 0.8998066655545518 \hfill \textit{(Sens: 0.724, Spec: 0.998)}
+  
+# Pull original PenX antibiotic data
+abxData = pd.read_csv("antibiotics_data.csv")
+names = abxData["Antibiotic"].tolist()
+
+
+# Load R1 
+molSeriesR1 = abxData.set_index("Antibiotic")["SMILESR1"].apply(
+    lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None
+)
+
+# Filter small R2 Side chains
+def load_r2_safely(smiles, min_heavy_atoms=8): # at 13 becomes same as nothing, optimum is at 8
+    if pd.isna(smiles):
+        return None
+    
+    mol = Chem.MolFromSmiles(smiles)
+    
+    # Only keep the molecule if it meets the biological complexity threshold
+    if mol and mol.GetNumHeavyAtoms() >= min_heavy_atoms:
+        return mol
+        
+    return None
+
+# Apply the filtered loading function to R2 
+molSeriesR2 = abxData.set_index("Antibiotic")["SMILESR2"].apply(load_r2_safely)
+
+def save_matrix(df, fileName):
+    np.fill_diagonal(df.values, -1)
+    df.to_csv(fileName, index_label='Antibiotic')
+
+# Helper: Substructure Match (Returns 1 if R1s match OR R2s match)
+def check_direct_match(m1_r1, m1_r2, m2_r1, m2_r2):
+    if m1_r1 and m2_r1 and (m1_r1.HasSubstructMatch(m2_r1) or m2_r1.HasSubstructMatch(m1_r1)):
+        return 1
+    if m1_r2 and m2_r2 and (m1_r2.HasSubstructMatch(m2_r2) or m2_r2.HasSubstructMatch(m1_r2)):
+        return 1
+    return 0
+
+# Helper: Similarity Calculation (Takes max of R1 sim and R2 sim)
+def get_max_sim(f1_r1, f1_r2, f2_r1, f2_r2, simFunc):
+    sim_r1 = simFunc(f1_r1, f2_r1) if (f1_r1 and f2_r1) else 0
+    sim_r2 = simFunc(f1_r2, f2_r2) if (f1_r2 and f2_r2) else 0
+    return max(sim_r1, sim_r2)
+
+# --- 1. Direct Match ---
+directMatchDf = pd.DataFrame(0, index=names, columns=names)
+for row in names:
+    directMatchDf.loc[row] = [check_direct_match(molSeriesR1[row], molSeriesR2[row], molSeriesR1[col], molSeriesR2[col]) for col in names]
+save_matrix(directMatchDf, 'directMatch.csv')
+
+# --- 2. Morgan Fingerprints ---
+fpGen = rdFingerprintGenerator.GetMorganGenerator(radius=3, fpSize=2048)
+fpSeriesR1 = molSeriesR1.apply(lambda m: fpGen.GetCountFingerprint(m) if m else None)
+fpSeriesR2 = molSeriesR2.apply(lambda m: fpGen.GetCountFingerprint(m) if m else None)
+
+for mode, threshold, fileName in [('Dice', thresholdMD, 'morganDice.csv'), ('Tanimoto', thresholdMT, 'morganTanimoto.csv')]:
+    df = pd.DataFrame(0, index=names, columns=names)
+    simFunc = DataStructs.DiceSimilarity if mode == 'Dice' else DataStructs.TanimotoSimilarity
+    for row in names:
+        df.loc[row] = [1 if get_max_sim(fpSeriesR1[row], fpSeriesR2[row], fpSeriesR1[col], fpSeriesR2[col], simFunc) >= threshold else 0 for col in names]
+    save_matrix(df, fileName)
+
+# --- 3. Pharmacophore Dice ---
+pharmFpSeriesR1 = molSeriesR1.apply(lambda m: Generate.Gen2DFingerprint(m, Gobbi_Pharm2D.factory) if m else None)
+pharmFpSeriesR2 = molSeriesR2.apply(lambda m: Generate.Gen2DFingerprint(m, Gobbi_Pharm2D.factory) if m else None)
+pharmDf = pd.DataFrame(0, index=names, columns=names)
+for row in names:
+    pharmDf.loc[row] = [1 if get_max_sim(pharmFpSeriesR1[row], pharmFpSeriesR2[row], pharmFpSeriesR1[col], pharmFpSeriesR2[col], DataStructs.DiceSimilarity) >= thresholdPhD else 0 for col in names]
+save_matrix(pharmDf, 'pharmacoDice.csv')
+
+# --- 4. MACCS Keys ---
+maccsFpSeriesR1 = molSeriesR1.apply(lambda m: MACCSkeys.GenMACCSKeys(m) if m else None)
+maccsFpSeriesR2 = molSeriesR2.apply(lambda m: MACCSkeys.GenMACCSKeys(m) if m else None)
+maccsDf = pd.DataFrame(0, index=names, columns=names)
+for row in names:
+    maccsDf.loc[row] = [1 if get_max_sim(maccsFpSeriesR1[row], maccsFpSeriesR2[row], maccsFpSeriesR1[col], maccsFpSeriesR2[col], DataStructs.DiceSimilarity) >= thresholdMAC else 0 for col in names]
+save_matrix(maccsDf, 'maccsDice.csv')
+
+# --- 5. MCS Overlap ---
+mcsDf = pd.DataFrame(0, index=names, columns=names)
+for i, rowName in enumerate(names):
+    m1_r1, m1_r2 = molSeriesR1[rowName], molSeriesR2[rowName]
+    for j, colName in enumerate(names):
+        if i >= j: continue 
+        m2_r1, m2_r2 = molSeriesR1[colName], molSeriesR2[colName]
+        
+        score_r1, score_r2 = 0, 0
+        
+        if m1_r1 and m2_r1:
+            res_r1 = rdFMCS.FindMCS([m1_r1, m2_r1], completeRingsOnly=False, ringMatchesRingOnly=True)
+            score_r1 = res_r1.numAtoms / min(m1_r1.GetNumAtoms(), m2_r1.GetNumAtoms())
+            
+        if m1_r2 and m2_r2:
+            res_r2 = rdFMCS.FindMCS([m1_r2, m2_r2], completeRingsOnly=False, ringMatchesRingOnly=True)
+            score_r2 = res_r2.numAtoms / min(m1_r2.GetNumAtoms(), m2_r2.GetNumAtoms())
+            
+        if max(score_r1, score_r2) >= thresholdMCS:
+            mcsDf.iloc[i, j] = 1
+            mcsDf.iloc[j, i] = 1
+
+save_matrix(mcsDf, 'mcsOverlap.csv')
+
+# --- 6. Atom Pairs ---
+apGen = rdFingerprintGenerator.GetAtomPairGenerator(minDistance=1, maxDistance=7)
+apSeriesR1 = molSeriesR1.apply(lambda m: apGen.GetCountFingerprint(m) if m else None)
+apSeriesR2 = molSeriesR2.apply(lambda m: apGen.GetCountFingerprint(m) if m else None)
+apDf = pd.DataFrame(0, index=names, columns=names)
+for row in names:
+    apDf.loc[row] = [1 if get_max_sim(apSeriesR1[row], apSeriesR2[row], apSeriesR1[col], apSeriesR2[col], DataStructs.DiceSimilarity) >= thresholdAPD else 0 for col in names]
+save_matrix(apDf, 'atomPairsDice.csv')
+```
+
+```{python}
+#| label: PermissiveMatching
+#| echo: false
+#| include: true
+import pandas as pd
+import numpy as np
+import re
+from rdkit import Chem
+
+## Redundant?
+# Pull Data
+#abxData = pd.read_csv("antibiotics_data.csv")
+#names = abxData["Antibiotic"].tolist()
+
+#molSeriesR1 = abxData.set_index("Antibiotic")["SMILESR1"].apply(lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None)
+#molSeriesR2 = abxData.set_index("Antibiotic")["SMILESR2"].apply(lambda x: Chem.MolFromSmiles(x) if pd.notna(x) else None)
+
+def get_clinical_permissive_smarts(mol):
+    if mol is None: return None
+    smarts = Chem.MolToSmarts(mol)
+    smarts = re.sub(r"\[#(9|17|35|53)\]", "[F,Cl,Br,I]", smarts)
+    smarts = smarts.replace("-[#8]-", "~") 
+    return smarts
+
+# Pre-generate the patterns for R1 and R2
+patternSeriesR1 = molSeriesR1.apply(get_clinical_permissive_smarts)
+patternSeriesR2 = molSeriesR2.apply(get_clinical_permissive_smarts)
+
+permissiveMatchDf = pd.DataFrame(0, index=names, columns=names)
+
+# Run the Symmetric Matching Loop
+for i, rowName in enumerate(names):
+    rowMol_R1, rowMol_R2 = molSeriesR1[rowName], molSeriesR2[rowName]
+    rowQueryStr_R1, rowQueryStr_R2 = patternSeriesR1[rowName], patternSeriesR2[rowName]
+    
+    for j in range(i + 1, len(names)):
+        colName = names[j]
+        colMol_R1, colMol_R2 = molSeriesR1[colName], molSeriesR2[colName]
+        colQueryStr_R1, colQueryStr_R2 = patternSeriesR1[colName], patternSeriesR2[colName]
+        
+        match_found = False
+        
+        # Check R1
+        if rowMol_R1 and colMol_R1 and rowQueryStr_R1 and colQueryStr_R1:
+            qRow_R1 = Chem.MolFromSmarts(rowQueryStr_R1)
+            qCol_R1 = Chem.MolFromSmarts(colQueryStr_R1)
+            if (qCol_R1 and rowMol_R1.HasSubstructMatch(qCol_R1)) or \
+               (qRow_R1 and colMol_R1.HasSubstructMatch(qRow_R1)):
+                match_found = True
+                
+        # Check R2 (Only if R1 hasn't already matched)
+        if not match_found and (rowMol_R2 and colMol_R2 and rowQueryStr_R2 and colQueryStr_R2):
+            qRow_R2 = Chem.MolFromSmarts(rowQueryStr_R2)
+            qCol_R2 = Chem.MolFromSmarts(colQueryStr_R2)
+            if (qCol_R2 and rowMol_R2.HasSubstructMatch(qCol_R2)) or \
+               (qRow_R2 and colMol_R2.HasSubstructMatch(qRow_R2)):
+                match_found = True
+
+        if match_found:
+            permissiveMatchDf.iloc[i, j] = 1
+            permissiveMatchDf.iloc[j, i] = 1
+
+def save_matrix(df, fileName):
+    np.fill_diagonal(df.values, -1)
+    df.to_csv(fileName, index_label='Antibiotic')
+
+save_matrix(permissiveMatchDf, 'permissiveDirectMatch.csv')
+```
+
+
+
+```{r echo=FALSE, include=TRUE, message=FALSE}
+#| label: fig-huttenChart
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "Cross reactivity matrix manually re-created from Hutten et al. Note: white:no data; Grey:cross-tabulation similar; Green:no crossreactivity; Safe; Orange:Cinically relevant discrepancy between studies; Red:(potential) crossreactivity: unsafe; N: nNumber of authors describing this potential cross reactivity as tabulated by Hutten et al"
+
+
+huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3), 
+                           c("#808080", "#A9D08F", "#FF0000", "#CF734F", "#FFFFFF"))
+
+plotAbxHeatmapWithNumbers(
+  colorCsvPath = "Original.csv", # Hutten's Cross reactivity values
+  numbersCsvPath = "OriginalNumbered.csv", # The numbers inside Hutten et al's chart
+  chartTitle = "Hutten et al.", 
+  colMapping = huttenColors
+)
+
+
+#plotAbxHeatmap("Original.csv", "Hutten et al.", colorRamp2(c(-1, 0, 1, 2, 3), c("#808080", "#A9D08F","#FF0000","#CF734F","#FFFFFF")))
+```
+\newpage
+
+# Direct Matching (PenicillinX Original)
+
+The existing direct matching algorithm from PenicillinX web app.[@liamjones2025] Compares molecular structures directly using graph based comparisons of side chain SMILES[@weininger1988]. It does not produce false positives, however sensitivity is limited, and often does not account for R1 alterations in side chain moieties that do not change allergenic potential.
+
+```{r DirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using PenicillinX direct matching algorithm"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("directMatch.csv", "Direct Matching", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+directMatchStats <- calculateStats("directMatch.csv", huttenMat) # 'mat' is from Hutten et al.
+
+```
+
+
+\newpage
+# Permissive Direct Matching (PDM) using SMARTS substitutions
+
+A Matching algorithm similar to original PenicillinX,[@liamjones2025] but instead using SMARTS pattern matching.[@daylightchemicalinformationsystemsinc11] It implements bioisosteric substitution for features with similar expected behaviour specifically treating halogens as a united class (i.e. flucloxacillin-dicloxacillin) as well as methylene and ether linkages. (i.e. Penicillin G-VK). Continued work on this method shows promise in increasing the sensitivity of the algorithm while minimising loss to specificity.
+
+```{r PermissiveDirectMatchChart, echo=FALSE, include=TRUE, message=FALSE, fig.cap="Cross reactivity matrix using an improved, more pemissive matching algorithm"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("permissiveDirectMatch.csv", "Permissive Direct Matching", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+permissiveDirectMatchStats <- calculateStats("permissiveDirectMatch.csv", huttenMat) # 'mat' is from Hutten et al.
+```
+
+\newpage
+
+# Morgan Fingerprinting with Dice Coefficient 
+
+This method utilises Morgan circular fingerprints,[@morgan1965] which iteratively encodes the local atomic environment into a bit vector. These fingerprints are then compared between two side chains using the Dice Coefficient[@dice1945;@cereto-massague2015]. The Dice coefficient assigns values to molecular structures, and weighs shared features more heaviliy than the total feature set, providing a measure of structural overlap. \begin{equation} S_{AB} = \frac{2C}{A + B} \end{equation} where S~AB~ is similarity coefficient, C is the common features between both molecules, and A & B are the features in each molecule.
+
+```{r morganDiceChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Dice Similarity "}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("morganDice.csv", "Morgan-Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+morganDiceStats <- calculateStats("morganDice.csv", huttenMat)
+```
+\newpage
+
+# Morgan Fingerprinting with Tanimoto Coefficient 
+
+A variation of the previous algorithm that instead utilises the Tanimoto Coefficient[@bajusz2015]. Similar in concept to the Dice Coefficient, but with a different weight applied to matching substructures. Previous modelling in this project indicated that the Dice Coefficient strictly dominates the Tanimoto Coefficient, in detecting cross reactivity. Thus analyses using Tanimoto have been excluded from the final analysis.
+\begin{equation} S_{AB} = \frac{C}{A + B - C} \end{equation}
+
+```{r morganTanimotoChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Tanimoto Similarity "}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("morganTanimoto.csv", "Morgan-Tanimoto Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+morganTanimotoStats <- calculateStats("morganTanimoto.csv", huttenMat)
+```
+
+
+# Pharmacophore with Dice Coefficient
+
+Pharmacophore fingerprinting maps the chemical characteristics of atoms and functional groups, such as hydrogen bond acceptors/donors, aliphatics/aromtatics. The Dice coefficient is then applied to attempt to model how an IgE molecule may 'perceive' a side chain's binding potential regardless of non-functional differences in the molecular structure.[@cereto-massague2015]
+
+```{r PharmacoDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Morgan fingerprinting with Pharmacophores"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("pharmacoDice.csv", "Pharmacophore Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+pharmacoDiceStats <- calculateStats("pharmacoDice.csv", huttenMat)
+```
+
+\newpage
+
+# MACCS with Dice Coefficient
+<!--Changed from Tanimoto, remember to change variable names.
+-->
+
+This method utilises Molecular Access System(MACCS) keys, a specific type of pre-defined, publicly available structural fragment definition. There are 166 public fragment definitions in the RDKit implementation. A bit string is generated with reference to the presence or absence of certain features, for example, < 3 oxygens, S-S bond, or ring of size 4, etc.[@greglandrum2023;@joseaniceto2023] This method attempts to capture broad structural classes and motifs rather than atom-by-atom circular fingerprints.
+;
+```{r MACCSDice, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using MACCS keys with Dice Similarity "}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("maccsDice.csv", "MACCS Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+maccsDiceStats <- calculateStats("maccsDice.csv", huttenMat)
+```
+\newpage
+
+# Maximum Common Substructure (MCS) Overlap
+
+The MCS algorithm identifies the largest substructure shared by two side chains. It performs a graph-matching search to find the maximum number of identical atoms and bonds common to both molecules. A similarity score is calculated as the ratio of the shared atoms to the total atoms in the smaller of the two molecules.[@andrewdalke2012] Calculated as: \begin{equation}
+S_{MCS} = \frac{|MCS(A,B)|}{\min(|A|, |B|)}
+\end{equation}
+
+```{r MCS, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Maximum Common Substructure"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("mcsOverlap.csv", "Maximum Common Substructure Overlap", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+mcsStats <- calculateStats("mcsOverlap.csv", huttenMat)
+```
+
+\newpage
+
+# Atom Pairs With Dice Coefficient
+
+The Atom Pairs descriptor[@carhart1985], provides a topological representation based on relationships between every possible pair of non-hydrogen atoms within a given molecule. The descriptor records the chemical nature of each pair of atoms, comprising; atomic number, number of neighbouring atoms, and number of bonding pi-electrons. A value is assigned based on the shortest interatomic distance between the pair. The atomic properties and the interatomic distance combined are referred to as a 'triplet'. These are then aggregated into a vector, comprising a bit in the fingerprint. The atom pairs algorithm, with Tanimoto coefficient was used by Picard et al[@picard2019], using the now defunct ChemMine tool[@backman2011] to assign similarity scores to various $\beta$-lactam antibiotics, then applying these values along with empirical risk of cross reactivity in a linear regression analysis. Picard et al however, did not attempt to make formal predictions on the cross reactivity of particular $\beta$-lactams using defined similarity thresholds. Additionally, the Tanimoto Coefficient produces less robust results than using the Dice Coefficient.
+<!--
+- Descriptor Topological representation of molecule.
+- Based on relationships between every possible pair of non-hydrogen atoms within the molecule. 
+- Analyses the spatial arrangement of the features within a molecule
+- Records the chemical nature of two atoms within the molecule and the topological distance between them.
+- Key properties include
+  - Atomic number
+  - Number of neighbours
+  - Number of bonding pi-electrons  
+A value is also assigned based on the shortest path between the pair of atoms.   
+- These values make up a triplet, which are then aggregated into a vector, making up a bit in the fingerprint.
+(Atom 1 description) - (separation) - (atom 2 description)
+- C, O, N, S, F, Cl, Br, I, P, Si, B, Se, and
+As are represented explicitly in our current programs. The
+generic symbol “Y” is used for atoms of any other type.
+Defined in this way -->
+```{r atomPairsChart, include=TRUE, echo=FALSE, fig.cap="Cross reactivity matrix using Atom Pairs with Dice Similarity"}
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("atomPairsDice.csv", "Atom Pairs Dice Similarity", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+atomPairsStats <- calculateStats("atomPairsDice.csv", huttenMat)
+```
+
+\newpage
+
+```{python}
+#| label: ensembleMaker
+#| echo: false
+#| include: true
+import pandas as pd
+import numpy as np
+
+# List of all algorithm CSVs
+files = ["directMatch.csv", "morganDice.csv", "pharmacoDice.csv", 
+         "maccsDice.csv", "permissiveDirectMatch.csv", 
+         "atomPairsDice.csv", "mcsOverlap.csv"]
+
+# Load all dataframes
+dataframes = [pd.read_csv(f, index_col=0) for f in files]
+
+# Create the Binary Mask for the background colours
+ensembleMask = (dataframes[0] == 1)
+for df in dataframes[1:]:
+    ensembleMask |= (df == 1)
+ensembleDf = ensembleMask.astype(int)
+np.fill_diagonal(ensembleDf.values, -1)
+ensembleDf.to_csv("ensembleMatch.csv")
+
+#Create the Count Matrix for the labels
+# convert each DF to 0/1 and sum them up
+ensembleCountDf = pd.DataFrame(0, index=ensembleDf.index, columns=ensembleDf.columns)
+for df in dataframes:
+    # Ensure we only count actual '1's (ignoring -1s)
+    ensembleCountDf += (df == 1).astype(int)
+
+# Set diagonal to -1 so the heatmap function knows to ignore/grey them out
+np.fill_diagonal(ensembleCountDf.values, -1)
+ensembleCountDf.to_csv("ensembleCounts.csv")
+
+```
+
+
+# All Algorithms Combined
+
+A matrix generated with the combined hits of all previous algorithms, currently excluding Morgan Tanimoto due to poor performance (it does not find matches not already covered by other algorithms). MCS overlap has been re-added after further tweaking, having been removed in earlier iterations due to poor sensitivity. Atom-Pairs algorithm has been added. Cells are labelled with the number of individual algorithms indicating a potential cross reaction.
+
+<!--{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms"}
+#| label: fig-combo
+#| fig-width: 10
+#| fig-height: 10
+plotAbxHeatmap("ensembleMatch.csv", "Combined Algorithm Performance", colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000")))
+ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
+```
+-->
+
+```{r include=TRUE, echo=FALSE, fig.cap="Combined performance of all algorithms with hit counts"}
+#| label: fig-combo
+#| fig-width: 10
+#| fig-height: 10
+
+ 
+comboColors <- colorRamp2(c(-1, 0, 1), c("#808080", "#A9D08F", "#FF0000"))
+
+plotAbxHeatmapWithNumbers(
+  colorCsvPath = "ensembleMatch.csv",   # Sets the background color (Red/Green)
+  numbersCsvPath = "ensembleCounts.csv", # Sets the overlaid text (0-7)
+  chartTitle = "Combined Algorithm Performance", 
+  colMapping = comboColors
+)
+
+# calculate the stats using the binary matrix
+ensembleStats <- calculateStats("ensembleMatch.csv", huttenMat)
+
+```
+
+\newpage
+
+# Hutten et al. with Superimposed Algorithm Predictions
+
+A re-creation of the Hutten et al[@hutten2025] Matrix with black circles representing algorithmically predicted cross reactions seen in @fig-combo.
+
+
+```{r fig-superimposed-audit, echo=FALSE, message=FALSE}
+#| fig-width: 10
+#| fig-height: 10
+#| fig.cap: "Algorithim predictions superimposed over Hutten et al. Matrix. Note: white:no data; Grey:cross-tabulation similar; Green:no crossreactivity; Safe; Orange:Cinically relevant discrepancy between studies; Red:(potential) crossreactivity: unsafe; Grey circle: Cross reactivity predicted by algorithm" 
+
+# Define your standard Hutten colors
+huttenColors <- colorRamp2(c(-1, 0, 1, 2, 3), 
+                           c("#808080", "#A9D08F", "#FF0000", "#CF734F", "#FFFFFF"))
+
+plotSuperimposedHeatmap(
+  baseCsvPath = "Original.csv",           
+  overlayCsvPath = "ensembleMatch.csv",   
+  chartTitle = "Superimposed Matrices", 
+  baseColMapping = huttenColors
+)
+# Creates output png for my manuscript
+#dev.copy(
+#  device = png, 
+#  filename = "fig_superimposed_matrix.png", 
+#  width = 10, 
+#  height = 10, 
+#  units = "in", 
+#  res = 300
+#)
+
+#  close
+#dev.off()
+```
+
+
+
+
+
+
+
+\newpage
+
+# Performance Table
+
+A table detailing the performance of each algorithm with the final column demonstrating the performance of all algorithms combined. Youden's J is used as an overall performance metric to assist in gauging the cost/benefit of each change to an algorithm. Youden's J is calculated as:
+\begin{equation}
+J = \text{Sensitivity} + \text{Specificity} - 1
+\end{equation}
+
+*I expect there should be a way that I can automate the process of tweaking the thresholds for the similarity coefficients to achieve an optimum Youden's J. Thus far these tweaks have been done manually, then revised by observing the result.*
+
+
+```{python}
+#| label: tbl-performanceTable
+#| echo: false
+#| include: true
+#| tbl-cap: "Compared performance of each algorithm Morgan Tanimoto not included in combined result. DM:Direct Matching, MD:Morgan-Dice, PDM:Permissive Direct Matching, Pharmaco:Pharmacophore, MCS:Maximum Common Substructure, AP:Atom Pairs."
+#| tbl-pos: H
+
+from IPython.display import Markdown
+from tabulate import tabulate
+
+# Reminder: access R lists using the 'r.' prefix
+
+dm = r.directMatchStats
+pdm = r.permissiveDirectMatchStats
+md = r.morganDiceStats
+mt = r.morganTanimotoStats
+pd = r.pharmacoDiceStats
+mcs = r.mcsStats
+mct = r.maccsDiceStats
+apd = r.atomPairsStats
+ens = r.ensembleStats
+# Table rows
+table = [
+    ["Threshold", 'N/A', thresholdMD, 'N/A', thresholdPhD, thresholdMCS, thresholdMAC, thresholdAPD, 'N/A'],   
+    ["Possible Hits", dm['possibleHits'], md['possibleHits'], pdm['possibleHits'], pd['possibleHits'], mcs['possibleHits'], mct["possibleHits"], apd['possibleHits'], ens['possibleHits']],
+    ["Total Hits", dm['totalHits'], md['totalHits'], pdm['totalHits'], pd['totalHits'], mcs['totalHits'], mct["totalHits"], apd['totalHits'], ens['totalHits']],
+    ["True +ve", dm['truePositives'], md['truePositives'], pdm['truePositives'], pd['truePositives'], mcs['truePositives'], mct["truePositives"], apd["truePositives"], ens['truePositives']],
+    ["False +ve", dm['falsePositives'], md['falsePositives'], pdm['falsePositives'], pd['falsePositives'], mcs['falsePositives'], mct["falsePositives"], apd["falsePositives"], ens['falsePositives']],
+    ["False -ve", dm['falseNegatives'], md['falseNegatives'], pdm['falseNegatives'], pd['falseNegatives'], mcs['falseNegatives'], mct["falseNegatives"], apd["falseNegatives"], ens['falseNegatives']],
+    ["no Data", dm['noDataHit'], md['noDataHit'], pdm['noDataHit'], pd['noDataHit'], mcs['noDataHit'], mct["noDataHit"], apd["noDataHit"], ens['noDataHit']],
+    ["Sensitivity", dm['sensitivity'], md['sensitivity'], pdm['sensitivity'], pd['sensitivity'], mcs['sensitivity'], mct['sensitivity'], apd['sensitivity'], ens['sensitivity']],
+    ["Specificity", dm['specificity'], md['specificity'], pdm['specificity'], pd['specificity'], mcs['specificity'], mct['specificity'], apd['specificity'], ens['specificity']]
+]
+
+headers = ["Metric", "DM", "MD", "PDM", "Pharmaco", "MCS", "MACCS","AP","Combo"]
+
+# Creates the main table first
+tableLatex = tabulate(table, headers=headers, tablefmt="latex_booktabs")
+
+# This adds Youden's J row with a midrule separator
+youdenrRow = f"{dm['youdensJ']} & {md['youdensJ']} & {pdm['youdensJ']} & {pd['youdensJ']} & {mcs['youdensJ']} & {mct['youdensJ']}& {apd['youdensJ']} & {ens['youdensJ']}"
+tableLatex = tableLatex.replace(r"\bottomrule", 
+                                   f"\\midrule\nYouden's J & {youdenrRow} \\\\\n\\bottomrule")
+
+Markdown(tableLatex)
+
+
+```
+
+
+
+
+# Raw Results
+
+A generated list of matches deemed to be false positives or negatives when compared to the Hutten et al. chart for auditing purposes. These can be plugged into PenicillinX[@liamjones2025] for visual inspection of the structures in order to generate hypotheses on why a particular algorithm may have incorrectly hit or missed potential interactions.
+
+```{python}
+#| label: pair-attribution-analysis
+#| echo: false
+#| output: asis
+
+import pandas as pd
+import numpy as np
+
+# Loads the matrices
+try:
+    ensembleDf = pd.read_csv("ensembleMatch.csv", index_col=0)
+    originalDf = pd.read_csv("Original.csv", index_col=0)
+    
+    # Define and load individual matrices
+    algo_files = {
+        "DM": "directMatch.csv",
+        "PDM": "permissiveDirectMatch.csv",
+        "MD": "morganDice.csv",
+        "Pharmaco": "pharmacoDice.csv",
+        "MCS": "mcsOverlap.csv",
+        "MACCS": "maccsDice.csv",
+        "AP":"atomPairsDice.csv"
+    }
+
+    algos = {}
+    for name, file in algo_files.items():
+        try:
+            algos[name] = pd.read_csv(file, index_col=0)
+        except FileNotFoundError:
+            continue
+
+    # Align DataFrames
+    common_idx = originalDf.index.intersection(ensembleDf.index)
+    common_cols = originalDf.columns.intersection(ensembleDf.columns)
+    orig_aligned = originalDf.loc[common_idx, common_cols]
+    ens_aligned = ensembleDf.loc[common_idx, common_cols]
+
+    # Define helper inside the same scope
+    def get_contributing_algos(row_name, col_name):
+        """Finds which individual algorithms flagged 1 for this pair."""
+        contributors = []
+        for name, df in algos.items():
+            if row_name in df.index and col_name in df.columns:
+                if df.loc[row_name, col_name] == 1:
+                    contributors.append(name)
+        return ", ".join(contributors)
+
+    def run_analysis(mask, title):
+        rows, cols = np.where(mask)
+        pairs = set()
+        pair_details = {}
+
+        for r, c in zip(rows, cols):
+            r_name = ens_aligned.index[r]
+            c_name = ens_aligned.columns[c]
+            pair = tuple(sorted([r_name, c_name]))
+            
+            if pair not in pairs:
+                pairs.add(pair)
+                pair_details[pair] = get_contributing_algos(r_name, c_name)
+
+        # LaTeX rendering for PDF
+        print(r"\subsubsection{" + f"{len(pairs)} " + title + r"}")
+        print(r"\begin{itemize}")
+        for (abx1, abx2), contributors in sorted(pair_details.items()):
+            contrib_str = f" \\textbf{{[{contributors}]}}" if contributors else " [None]"
+            # Escape & for LaTeX
+            abx_line = f"{abx1} and {abx2}".replace("&", r"\&")
+            print(r"  \item " + f"{abx_line}{contrib_str}")
+        print(r"\end{itemize}")
+        print(r"\hrule")
+
+    # Generate the Sections
+    # Potential Cross-Reactions (No Data)
+    nd_mask = (ens_aligned == 1) & (orig_aligned == 3)
+    run_analysis(nd_mask, "Predicted cross-reactions with no clinical data in Hutten et al.")
+    # False Positives
+    fp_mask = (ens_aligned == 1) & (orig_aligned == 0)
+    run_analysis(fp_mask, "Potential false positives as compared to Hutten et al.")
+
+    # Discrepant positives
+    dp_mask = (ens_aligned == 1) & (orig_aligned == 2)
+    run_analysis(dp_mask, "Predicted cross-reactions where there is discrepancy according to Hutten et al." )
+
+    # Discrepant Negatives
+    dp_mask = (ens_aligned == 0) & (orig_aligned == 2)
+    run_analysis(dp_mask, "Negative predictions where there is discrepancy according to Hutten et al." )
+
+    # False Negatives
+    fn_mask = (ens_aligned == 0) & (orig_aligned == 1)
+    run_analysis(fn_mask, "Potential false negatives as compared to Hutten et al.")
+    
+
+
+
+except Exception as e:
+    print(f"Error during analysis: {e}")
+    
+# True Positives Analysis
+tp_mask = (ens_aligned == 1) & (orig_aligned == 1)
+
+def run_tp_analysis(mask, title):
+    rows, cols = np.where(mask)
+    pairs = set()
+    pair_details = {}
+
+    for r, c in zip(rows, cols):
+        r_name = ens_aligned.index[r]
+        c_name = ens_aligned.columns[c]
+        pair = tuple(sorted([r_name, c_name]))
+        
+        if pair not in pairs:
+            # We want to see which algos contributed
+            contributors = get_contributing_algos(r_name, c_name)
+            # Focus on "Unique" hits or those including the new AP module
+            pairs.add(pair)
+            pair_details[pair] = contributors
+
+    print(r"\subsubsection{" + f"{len(pairs)} " + title + r"}")
+    print(r"\begin{itemize}")
+    for (abx1, abx2), contributors in sorted(pair_details.items()):
+        # Highlight pairs where AP was a factor
+        is_ap_hit = "AP" in contributors
+        style = r"\textbf" if is_ap_hit else r"\textit"
+        
+        contrib_str = f" {style}{{{'[' + contributors + ']'}}}"
+        abx_line = f"{abx1} and {abx2}".replace("&", r"\&")
+        print(r"  \item " + f"{abx_line}{contrib_str}")
+    print(r"\end{itemize}")
+    print(r"\hrule")
+
+# Execute
+run_tp_analysis(tp_mask, "True Positives in agreement with Hutten et al.")
+    
+```
+
+
+
+## PR Curve
+
+```{python}
+#| label: fig-combined-pr-curve
+#| echo: false
+#| output: asis
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import precision_recall_curve
+from rdkit import DataStructs
+from rdkit.Chem import rdFMCS
+import numpy as np
+import pandas as pd
+
+# Load the Truth Matrix
+truth_df = pd.read_csv("Original.csv", index_col=0)
+
+# Calculate Raw Similarity Scores using EXACT objects inherited from algoblock
+y_true = []
+scores = {
+    "Morgan Dice": [], "Pharmaco Dice": [], "MACCS Dice": [], 
+    "Atom Pairs Dice": [], "MCS Overlap": []
+}
+
+# Align with truth_df 
+for i, name1 in enumerate(names):
+    for j, name2 in enumerate(names):
+        if i >= j: continue 
+        
+        truth = truth_df.loc[name1, name2]
+        if truth not in [0, 1]: continue 
+        
+        y_true.append(truth)
+        
+        # 1. Morgan
+        sim_r1 = DataStructs.DiceSimilarity(fpSeriesR1[name1], fpSeriesR1[name2]) if (fpSeriesR1[name1] and fpSeriesR1[name2]) else 0
+        sim_r2 = DataStructs.DiceSimilarity(fpSeriesR2[name1], fpSeriesR2[name2]) if (fpSeriesR2[name1] and fpSeriesR2[name2]) else 0
+        scores["Morgan Dice"].append(max(sim_r1, sim_r2))
+
+        # 2. Pharmaco
+        sim_r1 = DataStructs.DiceSimilarity(pharmFpSeriesR1[name1], pharmFpSeriesR1[name2]) if (pharmFpSeriesR1[name1] and pharmFpSeriesR1[name2]) else 0
+        sim_r2 = DataStructs.DiceSimilarity(pharmFpSeriesR2[name1], pharmFpSeriesR2[name2]) if (pharmFpSeriesR2[name1] and pharmFpSeriesR2[name2]) else 0
+        scores["Pharmaco Dice"].append(max(sim_r1, sim_r2))
+
+        # 3. MACCS
+        sim_r1 = DataStructs.DiceSimilarity(maccsFpSeriesR1[name1], maccsFpSeriesR1[name2]) if (maccsFpSeriesR1[name1] and maccsFpSeriesR1[name2]) else 0
+        sim_r2 = DataStructs.DiceSimilarity(maccsFpSeriesR2[name1], maccsFpSeriesR2[name2]) if (maccsFpSeriesR2[name1] and maccsFpSeriesR2[name2]) else 0
+        scores["MACCS Dice"].append(max(sim_r1, sim_r2))
+
+        # 4. Atom Pairs
+        sim_r1 = DataStructs.DiceSimilarity(apSeriesR1[name1], apSeriesR1[name2]) if (apSeriesR1[name1] and apSeriesR1[name2]) else 0
+        sim_r2 = DataStructs.DiceSimilarity(apSeriesR2[name1], apSeriesR2[name2]) if (apSeriesR2[name1] and apSeriesR2[name2]) else 0
+        scores["Atom Pairs Dice"].append(max(sim_r1, sim_r2))
+        
+        # 5. MCS Overlap
+        m1_r1, m1_r2 = molSeriesR1[name1], molSeriesR2[name1]
+        m2_r1, m2_r2 = molSeriesR1[name2], molSeriesR2[name2]
+        
+        score_r1, score_r2 = 0, 0
+        if m1_r1 and m2_r1:
+            res_r1 = rdFMCS.FindMCS([m1_r1, m2_r1], completeRingsOnly=False, ringMatchesRingOnly=True)
+            score_r1 = res_r1.numAtoms / min(m1_r1.GetNumAtoms(), m2_r1.GetNumAtoms())
+        if m1_r2 and m2_r2:
+            res_r2 = rdFMCS.FindMCS([m1_r2, m2_r2], completeRingsOnly=False, ringMatchesRingOnly=True)
+            score_r2 = res_r2.numAtoms / min(m1_r2.GetNumAtoms(), m2_r2.GetNumAtoms())
+        scores["MCS Overlap"].append(max(score_r1, score_r2))
+
+# Plotting
+plt.figure(figsize=(8, 6))
+current_thresholds = {
+    "Morgan Dice": thresholdMD,
+    "Pharmaco Dice": thresholdPhD,
+    "MACCS Dice": thresholdMAC,
+    "Atom Pairs Dice": thresholdAPD,
+    "MCS Overlap": thresholdMCS
+}
+
+for label, y_scores in scores.items():
+    precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
+    line, = plt.plot(recall, precision, label=label, lw=2)
+    color = line.get_color()
+    
+    # Mark the current manual threshold on the curve
+    idx = np.argmin(np.abs(thresholds - current_thresholds[label]))
+    x_point = recall[idx]
+    y_point = precision[idx]
+    plt.scatter(recall[idx], precision[idx], s=60, color=color, edgecolor='black', zorder=5)
+
+    # Labelling of dots
+    plt.annotate(label, 
+                 (x_point, y_point), 
+                 textcoords="offset points", 
+                 xytext=(5, 5), 
+                 fontsize=9,
+                 fontweight='bold',
+                 color=color)
+
+plt.xlabel('Recall (Sensitivity)')
+plt.ylabel('Precision (1 - False Discovery Rate)')
+plt.title('Combined Precision-Recall Curves for Thresholded Cross-Reactivity Algorithms')
+plt.xlim(0.2, 1.0)
+plt.ylim(0.3, 1.05)
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+
+# Save and print LaTeX
+plt.savefig("combined_pr_curve.png", dpi=300)
+plt.close() # CRITICAL: Prevents double rendering in Quarto
+
+print(r"\begin{center}")
+print(r"\includegraphics[width=0.9\textwidth]{combined_pr_curve.png}")
+print(r"\end{center}")
+```
+
+\newpage
+# R2 Attributed Cross-Reactivity
+
+```{python}
+#| label: r2-attribution-analysis
+#| echo: false
+#| output: asis
+
+from rdkit import Chem, DataStructs
+from rdkit.Chem import rdFMCS
+
+print(r"The following pairs triggered a match exclusively because of their R2 side chains. For these pairs, the R1 side chains fell below the similarity threshold, but the R2 side chains exceeded it.")
+print(r"\begin{itemize}")
+
+r2_driven_count = 0
+
+for i, name1 in enumerate(names):
+    for j, name2 in enumerate(names):
+        if i >= j: continue
+        
+        pure_r2_flags = []
+
+        # PDM Check
+        qRow_R1 = Chem.MolFromSmarts(patternSeriesR1[name1]) if patternSeriesR1[name1] else None
+        qCol_R1 = Chem.MolFromSmarts(patternSeriesR1[name2]) if patternSeriesR1[name2] else None
+        r1_pdm = False
+        if qCol_R1 and molSeriesR1[name1] and molSeriesR1[name1].HasSubstructMatch(qCol_R1): r1_pdm = True
+        if qRow_R1 and molSeriesR1[name2] and molSeriesR1[name2].HasSubstructMatch(qRow_R1): r1_pdm = True
+        
+        qRow_R2 = Chem.MolFromSmarts(patternSeriesR2[name1]) if patternSeriesR2[name1] else None
+        qCol_R2 = Chem.MolFromSmarts(patternSeriesR2[name2]) if patternSeriesR2[name2] else None
+        r2_pdm = False
+        if qCol_R2 and molSeriesR2[name1] and molSeriesR2[name1].HasSubstructMatch(qCol_R2): r2_pdm = True
+        if qRow_R2 and molSeriesR2[name2] and molSeriesR2[name2].HasSubstructMatch(qRow_R2): r2_pdm = True
+
+        if r2_pdm and not r1_pdm:
+            pure_r2_flags.append("PDM")
+
+        # Morgan
+        m1_r1, m2_r1 = fpSeriesR1[name1], fpSeriesR1[name2]
+        m1_r2, m2_r2 = fpSeriesR2[name1], fpSeriesR2[name2]
+        s_r1 = DataStructs.DiceSimilarity(m1_r1, m2_r1) if (m1_r1 and m2_r1) else 0
+        s_r2 = DataStructs.DiceSimilarity(m1_r2, m2_r2) if (m1_r2 and m2_r2) else 0
+        if s_r2 >= thresholdMD and s_r1 < thresholdMD: pure_r2_flags.append("Morgan")
+
+        # Pharmaco
+        p1_r1, p2_r1 = pharmFpSeriesR1[name1], pharmFpSeriesR1[name2]
+        p1_r2, p2_r2 = pharmFpSeriesR2[name1], pharmFpSeriesR2[name2]
+        s_r1 = DataStructs.DiceSimilarity(p1_r1, p2_r1) if (p1_r1 and p2_r1) else 0
+        s_r2 = DataStructs.DiceSimilarity(p1_r2, p2_r2) if (p1_r2 and p2_r2) else 0
+        if s_r2 >= thresholdPhD and s_r1 < thresholdPhD: pure_r2_flags.append("Pharmaco")
+
+        # MACCS
+        ma1_r1, ma2_r1 = maccsFpSeriesR1[name1], maccsFpSeriesR1[name2]
+        ma1_r2, ma2_r2 = maccsFpSeriesR2[name1], maccsFpSeriesR2[name2]
+        s_r1 = DataStructs.DiceSimilarity(ma1_r1, ma2_r1) if (ma1_r1 and ma2_r1) else 0
+        s_r2 = DataStructs.DiceSimilarity(ma1_r2, ma2_r2) if (ma1_r2 and ma2_r2) else 0
+        if s_r2 >= thresholdMAC and s_r1 < thresholdMAC: pure_r2_flags.append("MACCS")
+
+        #  Atom Pairs
+        a1_r1, a2_r1 = apSeriesR1[name1], apSeriesR1[name2]
+        a1_r2, a2_r2 = apSeriesR2[name1], apSeriesR2[name2]
+        s_r1 = DataStructs.DiceSimilarity(a1_r1, a2_r1) if (a1_r1 and a2_r1) else 0
+        s_r2 = DataStructs.DiceSimilarity(a1_r2, a2_r2) if (a1_r2 and a2_r2) else 0
+        if s_r2 >= thresholdAPD and s_r1 < thresholdAPD: pure_r2_flags.append("Atom Pairs")
+
+        # MCS Overlap
+        mol1_r1, mol2_r1 = molSeriesR1[name1], molSeriesR1[name2]
+        mol1_r2, mol2_r2 = molSeriesR2[name1], molSeriesR2[name2]
+        s_r1, s_r2 = 0, 0
+        if mol1_r1 and mol2_r1:
+            res = rdFMCS.FindMCS([mol1_r1, mol2_r1], completeRingsOnly=False, ringMatchesRingOnly=True)
+            s_r1 = res.numAtoms / min(mol1_r1.GetNumAtoms(), mol2_r1.GetNumAtoms())
+        if mol1_r2 and mol2_r2:
+            res = rdFMCS.FindMCS([mol1_r2, mol2_r2], completeRingsOnly=False, ringMatchesRingOnly=True)
+            s_r2 = res.numAtoms / min(mol1_r2.GetNumAtoms(), mol2_r2.GetNumAtoms())
+        if s_r2 >= thresholdMCS and s_r1 < thresholdMCS: pure_r2_flags.append("MCS")
+
+        # Print if R2 made the difference
+        if pure_r2_flags:
+            r2_driven_count += 1
+            truth = truth_df.loc[name1, name2]
+            
+            # Colour/Label code the ground truth for easy reading
+            if truth == 1: truth_label = "True +ve"
+            elif truth == 0: truth_label = "False +ve"
+            elif truth == 2: truth_label = "Discrepancy (Hutten: 2)"
+            elif truth == 3: truth_label = "No Data (Hutten: 3)"
+            else: truth_label = f"Hutten: {truth}"
+            
+            abx_line = f"{name1} and {name2}".replace("&", r"\&")
+            print(fr"  \item {{{abx_line}}} \textbf[{', '.join(pure_r2_flags)}] | \textbf{{{truth_label}}}")
+
+if r2_driven_count == 0:
+    print(r"  \item \textit{No pairs were matched exclusively due to R2 side chains. All R2 matches were also corroborated by an R1 match.}")
+    
+print(r"\end{itemize}")
+```
+
+
+
+\newpage
+# Other studies
+
+
+| Reference            | Index Abx   | Challenge Abx | Study +ve | Hutten et al +ve | PX +ve |
+| -------------------- | ----------- | ------------- | --------- | ---------------- | ------ |
+| Touati et al 2021    | Cefotaxime  | Cefradine     | Y         | N(1)             | N      |
+|                      | Cefotaxime  | Cefalotin     | Y         | Y(3)             | N      |
+|                      | Cefotaxime  | Cefuroxime    | Y         | Y(3)             | Y(3)   |
+|                      | Cefatrizine | Amoxicillin   | Y         | Y(2)             | Y(7)   |
+|                      | Cefadroxil  | Amoxicillin   | Y         | Y(3)             | Y(7)   |
+| Stevensen et al 2025 | Cefazolin   | Cefalexin     | N         | D(3)             | N      |
+|                      | Cefepime    | Penicillin VK | N         | N(3)             | N      |
+
+: Cross reference of OPCs results from other studies[@stevenson2025;@touati2021] with outcomes recorded in Hutten et al, as well as PenicillinX predicted result. Y:positive, N:Negative, D:Discrepant. Bracketed values correspond to number of included studies and number of algorithmic hits respectively {#tbl-CrossCheck}
+
+
+```{python}
+#| label: global-optimiser-differential-evolution
+#| echo: false
+#| output: false
+#| eval: false
+
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import differential_evolution
+import time
+
+# --- 1. Construct pdm_preds_arr to align perfectly with y_true ---
+pdm_df = pd.read_csv("permissiveDirectMatch.csv", index_col=0)
+truth_df = pd.read_csv("Original.csv", index_col=0)
+abxData = pd.read_csv("antibiotics_data.csv")
+names = abxData["Antibiotic"].tolist()
+
+pdm_preds = []
+for i, name1 in enumerate(names):
+    for j, name2 in enumerate(names):
+        if i >= j: continue
+        
+        truth = truth_df.loc[name1, name2]
+        if truth not in [0, 1]: continue 
+        
+        # Append True if PDM flagged this pair, False otherwise
+        pdm_preds.append(pdm_df.loc[name1, name2] == 1)
+
+pdm_preds_arr = np.array(pdm_preds)
+# -----------------------------------------------------------------
+
+# Prepare data 
+labels = list(scores.keys())
+score_matrix = np.array([scores[l] for l in labels]).T
+y_true_arr = np.array(y_true)
+
+# Static PDM Baseline 
+pos_count = np.sum(y_true_arr == 1)
+neg_count = np.sum(y_true_arr == 0)
+
+# Define the Objective Function for DE
+def ensemble_objective(trial_thresholds):
+    # The optimiser tries to min the return value
+    # Trial_thresholds order: Morgan, Pharmaco, MACCS, AP, MCS
+    thresh_vec = np.array(trial_thresholds)
+    
+    # Ensemble logic: PDM (static) OR thresholded scores
+    preds = pdm_preds_arr | np.any(score_matrix >= thresh_vec, axis=1)
+    
+    tp = np.sum(preds & (y_true_arr == 1))
+    fp = np.sum(preds & (y_true_arr == 0))
+    
+    sens = tp / pos_count
+    spec = (neg_count - fp) / neg_count
+    
+    # to max J we min (1 - J)
+    j_index = sens + spec - 1
+    
+    # anchor specificity with a penalty (Ensures we don't drop below 98% specificity)
+    penalty = 0
+    if spec < 0.95:  # was .98
+        penalty = (0.95 - spec) * 10 # was .98
+        
+    return (1 - j_index) + penalty
+
+# Configure and Run the Optimizer
+# Bounds: Morgan, Pharmaco, MACCS, AtomPairs, MCS
+bounds = [(0.02, 0.98), (0.02, 0.98), (0.02, 0.98), (0.02, 0.98), (0.02, 0.98)]
+# oldbounds = [(0.40, 0.80), (0.50, 0.95), (0.50, 0.95), (0.40, 0.80), (0.65, 0.98)]
+start_time = time.time()
+result = differential_evolution(
+    ensemble_objective, 
+    bounds, 
+    strategy='best1bin', 
+    popsize=500,     # Size of population
+    mutation=(0.1, 1), 
+    recombination=0.7,
+    tol=0.0001        # Finish when improvement is minimal
+)
+
+# Extract and Assign Winning Thresholds
+win_t_vals = result.x
+win_j = 1 - result.fun # Approximate if penalty is 0
+
+# Final check of stats for the combined ensemble
+preds = pdm_preds_arr | np.any(score_matrix >= win_t_vals, axis=1)
+tp = np.sum(preds & (y_true_arr == 1))
+fp = np.sum(preds & (y_true_arr == 0))
+win_sens = tp / pos_count
+win_spec = (neg_count - fp) / neg_count
+win_j_final = win_sens + win_spec - 1
+
+# --- DIAGNOSTIC: Calculate individual algorithm stats ---
+individual_stats = {}
+
+# 1. PDM Stats (Static)
+tp_pdm = np.sum(pdm_preds_arr & (y_true_arr == 1))
+fp_pdm = np.sum(pdm_preds_arr & (y_true_arr == 0))
+individual_stats["Permissive Direct Match"] = (tp_pdm / pos_count, (neg_count - fp_pdm) / neg_count)
+
+# 2. Variable Threshold Stats
+for i, label in enumerate(labels):
+    thresh = win_t_vals[i]
+    preds_single = score_matrix[:, i] >= thresh
+    tp_single = np.sum(preds_single & (y_true_arr == 1))
+    fp_single = np.sum(preds_single & (y_true_arr == 0))
+    
+    sens_single = tp_single / pos_count
+    spec_single = (neg_count - fp_single) / neg_count
+    individual_stats[label] = (sens_single, spec_single)
+
+# Output Summary
+print(r"\begin{tcolorbox}[colback=green!5,colframe=green!75,title=Differential Evolution Global Optimization]")
+print(fr"Optimizer converged in {time.time() - start_time:.1f} seconds.\\")
+print(r"\begin{itemize}")
+print(fr"  \item \textbf{{Optimized Ensemble J:}} {win_j_final:.4f}")
+print(fr"  \item \textbf{{Ensemble Sensitivity:}} {win_sens:.3f} | \textbf{{Specificity:}} {win_spec:.3f}")
+print(r"\end{itemize}")
+print(r"\hrulefill\\")
+print(r"\textbf{Winning Thresholds \& Individual Performance:}")
+print(r"\begin{description}")
+
+# Print PDM first (no threshold)
+sens_pdm, spec_pdm = individual_stats["Permissive Direct Match"]
+print(fr"  \item[PDM (Static):] N/A \hfill \textit{{(Sens: {sens_pdm:.3f}, Spec: {spec_pdm:.3f})}}")
+
+# Print the optimized algorithms
+for i, label in enumerate(labels):
+    sens_i, spec_i = individual_stats[label]
+    print(fr"  \item[{label}:] {win_t_vals[i]} \hfill \textit{{(Sens: {sens_i:.3f}, Spec: {spec_i:.3f})}}")
+    
+print(r"\end{description}")
+print(r"\end{tcolorbox}")
+```
+-->
+
+```{python}
+#| label: List-R2s-by-Length
+#| echo: false
+#| output: false
+#| eval: false
+import pandas as pd
+from rdkit import Chem
+
+abxData = pd.read_csv("antibiotics_data.csv")
+
+print("R2 Side Chains with 4 to 7 Heavy Atoms:\n")
+for idx, row in abxData.iterrows():
+    smiles = row['SMILESR2']
+    if pd.notna(smiles):
+        mol = Chem.MolFromSmiles(smiles)
+        if mol:
+            hac = mol.GetNumHeavyAtoms()
+            if 8 <= hac <= 30:
+                print(f"- {row['Antibiotic']:<15} | HAC: {hac} | SMILES: {smiles}")
+```
+
+```{python}
+#| label: CSVintegritycheck
+#| echo: false
+#| eval: false
+#| include: false
+import pandas as pd
+
+# Load the original truth matrix
+truth_df = pd.read_csv("Original.csv", index_col=0)
+
+# Fast check: does the dataframe equal its own transpose?
+is_symmetric = truth_df.equals(truth_df.T)
+
+if is_symmetric:
+    print("The matrix is  a perfect mirror.")
+else:
+    print("The matrix is not perfectly symmetric. the discrepancies are:\n")
+    mismatches = 0
+    for i in range(len(truth_df.index)):
+        for j in range(i + 1, len(truth_df.columns)):
+            val_ij = truth_df.iloc[i, j]
+            val_ji = truth_df.iloc[j, i]
+            
+            # Check if the values don't match (accounting for potential float/int type issues)
+            if float(val_ij) != float(val_ji):
+                mismatches += 1
+                row_name = truth_df.index[i]
+                col_name = truth_df.columns[j]
+                print(f"- {row_name} vs {col_name}: Top-Right = {val_ij} | Bottom-Left = {val_ji}")
+    
+    print(f"\nTotal discrepancies found: {mismatches}")
+```
+
+
+<!-- Optimising algorithm, to switch on, add ``` in front of the bracketed python and remove this comment syntax. takes about 4 minutes to run 20 million iterations. Only run the block, do not try to render with quarto.
+{python}
+#| label: global-ensemble-optimiser
+#| echo: false
+#| output: asis
+
+import numpy as np
+import time
+
+# Define the Global Optimizer Function
+def run_global_search_vectorized(y_true, scores_dict, iterations=20000000):
+    best_j = -1
+    best_thresholds = {}
+    
+    labels = list(scores_dict.keys())
+    # score_matrix shape: (n_pairs, 5)
+    score_matrix = np.array([scores_dict[l] for l in labels]).T
+    y_true_arr = np.array(y_true)
+    
+    # Pre-calculate constants for sensitivity/specificity to avoid repeated sums
+    pos_count = np.sum(y_true_arr == 1)
+    neg_count = np.sum(y_true_arr == 0)
+
+    # Pre-generate ALL thresholds: 20M x 5 floats ~= 800MB RAM
+    # Define bounds: Morgan, Pharmaco, MACCS, AtomPairs, MCS
+    lows =  np.array([0.40, 0.50, 0.50, 0.40, 0.65])
+    highs = np.array([0.75, 0.90, 0.90, 0.75, 0.95])
+    all_thresholds = np.random.uniform(lows, highs, size=(iterations, len(labels)))
+
+    print(f"Starting 20M iterations...")
+    start_time = time.time()
+
+    for i in range(iterations):
+        thresh_vec = all_thresholds[i]
+        
+        # Vectorized comparison across the 5 algorithms for this specific drug pair set
+        # 'preds' is a boolean array: True if ANY algo matches
+        preds = np.any(score_matrix >= thresh_vec, axis=1)
+        
+        # Calculate TP and FP using fast logical masking
+        tp = np.sum(preds & (y_true_arr == 1))
+        fp = np.sum(preds & (y_true_arr == 0))
+        
+        sens = tp / pos_count
+        spec = (neg_count - fp) / neg_count
+        current_j = sens + spec - 1
+        
+        # Clinical constraint + High Score check
+        if spec >= 0.96 and current_j > best_j:
+            best_j = current_j
+            best_thresholds = dict(zip(labels, thresh_vec))
+            best_stats = (sens, spec)
+            
+        # Optional: Progress heartbeat every 5 million
+        if (i + 1) % 5000000 == 0:
+            elapsed = time.time() - start_time
+            print(f"--- {i+1} iterations reached ({elapsed:.1f}s) ---")
+
+    return best_thresholds, best_j, best_stats
+
+#. Run the Optimization
+win_t, win_j, win_stats = run_global_search_vectorized(y_true, scores)
+
+# Store results for the rest of the document
+thresholdMD = win_t["Morgan Dice"]
+thresholdPhD = win_t["Pharmaco Dice"]
+thresholdMAC = win_t["MACCS Dice"]
+thresholdAPD = win_t["Atom Pairs Dice"]
+thresholdMCS = win_t["MCS Overlap"]
+
+# Output a summary
+print(r"\begin{tcolorbox}[colback=blue!5,colframe=blue!75,title=Global Optimizer Results (20M Iterations)]")
+print(fr"Completed in {time.time() - start_time:.1f} seconds.\\")
+print(r"\begin{itemize}")
+print(fr"  \item \textbf{{Ensemble Youden's J:}} {win_j:.4f}")
+print(fr"  \item \textbf{{Sensitivity:}} {win_stats[0]:.4f} | \textbf{{Specificity:}} {win_stats[1]:.4f}")
+print(r"\end{itemize}")
+print(r"\hrulefill\\")
+print(r"\textbf{Winning Thresholds:}")
+print(r"\begin{description}")
+for algo, val in win_t.items():
+    print(fr"  \item[{algo}:] {val:.4f}")
+print(r"\end{description}")
+print(r"\end{tcolorbox}")
+```
+
+-->
+
+```{python}
+#| label: raw-count-vector-demo
+#| echo: false
+#| eval: false
+#| include: false
+
+from rdkit import Chem
+from rdkit.Chem import rdFingerprintGenerator
+import itertools
+
+# Define the SMILES strings
+cephalexin_smiles = "N[C@@H](C(N)=O)C1=CC=CC=C1"
+amoxicillin_smiles = "N[C@@H](C(N)=O)C1=CC=C(O)C=C1"
+
+cephalexin = Chem.MolFromSmiles(cephalexin_smiles)
+amoxicillin = Chem.MolFromSmiles(amoxicillin_smiles)
+
+# Initialize the modern unified Atom Pair Generator
+ap_gen = rdFingerprintGenerator.GetAtomPairGenerator()
+
+# Generate the raw Count Fingerprints
+fp_ceph = ap_gen.GetCountFingerprint(cephalexin)
+fp_amox = ap_gen.GetCountFingerprint(amoxicillin)
+
+# Extract the underlying dictionary mapping {Feature_Hash: Frequency_Count}
+raw_dict_ceph = fp_ceph.GetNonzeroElements()
+raw_dict_amox = fp_amox.GetNonzeroElements()
+
+# Print a bit of the raw data 
+print(f"Total Unique Atom Pairs in Cephalexin: {len(raw_dict_ceph)}")
+print(f"Total Unique Atom Pairs in Amoxicillin: {len(raw_dict_amox)}\n")
+
+print("Cephalexin Raw Count Vector (Sample):")
+for feature, count in itertools.islice(raw_dict_ceph.items(), 10):
+    print(f"  Feature ID: {feature:<12} | Occurrences: {count}")
+
+print("\nAmoxicillin Raw Count Vector (Sample):")
+for feature, count in itertools.islice(raw_dict_amox.items(), 10):
+    print(f"  Feature ID: {feature:<12} | Occurrences: {count}")
+```
+
+```{python}
+#| label: maccs-keys-demo
+#| echo: false
+#| eval: false
+#| include: false
+
+from rdkit import Chem
+from rdkit.Chem import MACCSkeys
+
+#  Define the SMILES strings for two beta-lactams
+cephalexin_smiles = "N[C@@H](C(N)=O)C1=CC=CC=C1"
+amoxicillin_smiles = "N[C@@H](C(N)=O)C1=CC=C(O)C=C1"
+
+# Convert SMILES into RDKit Mol objects
+cephalexin = Chem.MolFromSmiles(cephalexin_smiles)
+amoxicillin = Chem.MolFromSmiles(amoxicillin_smiles)
+
+# Generate the MACCS Keys bit vectors 
+maccs_ceph = MACCSkeys.GenMACCSKeys(cephalexin)
+maccs_amox = MACCSkeys.GenMACCSKeys(amoxicillin)
+
+# Convert directly to string representations
+bitstring_ceph = maccs_ceph.ToBitString()
+bitstring_amox = maccs_amox.ToBitString()
+
+# Print out the full 167-bit strings
+print(f"Total MACCS Key Length: {len(bitstring_ceph)} bits (Index 0-166)\n")
+
+print(f"Cephalexin MACCS:\n{bitstring_ceph}\n")
+print(f"Amoxicillin MACCS:\n{bitstring_amox}")
+```
+
+
+\newpage 
+
+# References
+
+
+
+
+
+<!-- 
+
+
+# Todo
+- What if i change thresholds, but then require agreement between at least 2 algorithms?
+- Standardise legacy Rmarkdown formatting to Quarto
+- optimisation algorithm
+- continue optimising permissive match
+- read more recent papers
+
+
+-->
