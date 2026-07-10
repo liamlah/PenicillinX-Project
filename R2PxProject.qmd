@@ -1254,7 +1254,7 @@ for idx, row in abxData.iterrows():
         mol = Chem.MolFromSmiles(smiles)
         if mol:
             hac = mol.GetNumHeavyAtoms()
-            if 8 <= hac <= 30:
+            if 1 <= hac <= 5:
                 print(f"- {row['Antibiotic']:<15} | HAC: {hac} | SMILES: {smiles}")
 ```
 
